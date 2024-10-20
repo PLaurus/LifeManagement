@@ -1,4 +1,4 @@
-package com.lauruspa.life_management.ui.theme
+package com.lauruspa.life_management.core.ui.theme
 
 import androidx.compose.ui.graphics.Color
 

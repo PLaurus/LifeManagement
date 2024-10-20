@@ -1,6 +1,7 @@
 [versions]
 androidxCoreKtx = "1.13.1"
 fragmentKtx = "1.8.4"
+material = "1.5.0"
 composeBom = "2024.09.03"
 activityCompose = "1.9.0"
 lifecycleViewModelCompose = "2.8.5"
@@ -16,6 +17,10 @@ androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = 
 
 # The Fragment KTX module provides a number of extensions to simplify the fragment API.
 fragment-ktx = { group = "androidx.fragment", name = "fragment-ktx", version.ref = "fragmentKtx" }
+
+# Material Components for Android is a static library that provides implementations of the Material Design
+# specification. Compatible on devices running API 21 or later.
+material = { group = "com.google.android.material", name = "material", version.ref = "material" }
 
 compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
 

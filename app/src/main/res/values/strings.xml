@@ -1,3 +1,4 @@
 <resources>
 	<string name="app_name">LifeManagement</string>
+	<string name="main_open_bottom_sheet_button">Open bottom sheet</string>
 </resources>
