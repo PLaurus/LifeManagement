@@ -1,4 +1,10 @@
 <resources>
 	<string name="app_name">LifeManagement</string>
 	<string name="main_open_bottom_sheet_button">Open bottom sheet</string>
+	
+	<!-- Tasks fragment -->
+	<string name="tasks_fragment_create_task_button">Create task</string>
+	
+	<!-- Tasks creation fragment -->
+	<string name="tasks_creation_fragment_message">Task creation flow will be here</string>
 </resources>

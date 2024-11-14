@@ -1,6 +1,6 @@
 [versions]
 androidxCoreKtx = "1.13.1"
-fragmentKtx = "1.8.4"
+fragmentKtx = "1.8.5"
 material = "1.5.0"
 composeBom = "2024.09.03"
 activityCompose = "1.9.0"
