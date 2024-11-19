@@ -55,6 +55,7 @@ dependencies {
 	implementation libs.androidx.core.ktx
 	implementation libs.fragment.ktx
 	implementation libs.material
+	implementation libs.navigation.fragment
 	implementation platform(libs.compose.bom)
 	implementation libs.compose.material3
 	implementation libs.compose.ui.tooling.preview
