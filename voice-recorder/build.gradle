@@ -1,23 +1,17 @@
 plugins {
-	alias(libs.plugins.android.application)
+	alias(libs.plugins.android.library)
 	alias(libs.plugins.jetbrains.kotlin.android)
 }
 
 android {
-	namespace 'com.lauruspa.life_management'
-	compileSdk 35
+	namespace 'com.lauruspa.voice_recorder'
+	compileSdk 34
 
 	defaultConfig {
-		applicationId "com.lauruspa.life_management"
 		minSdk 24
-		targetSdk 35
-		versionCode 1
-		versionName "1.0"
 
 		testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
-		vectorDrawables {
-			useSupportLibrary true
-		}
+		consumerProguardFiles "consumer-rules.pro"
 	}
 
 	buildTypes {
@@ -43,27 +37,18 @@ android {
 	composeOptions {
 		kotlinCompilerExtensionVersion = libs.versions.kotlinCompilerExtension.get()
 	}
-
-	packaging {
-		resources {
-			excludes += '/META-INF/{AL2.0,LGPL2.1}'
-		}
-	}
 }
 
 dependencies {
 	implementation libs.androidx.core.ktx
 	implementation libs.fragment.ktx
-	implementation libs.material
-	implementation libs.navigation.fragment
 	implementation platform(libs.compose.bom)
 	implementation libs.compose.material3
-	implementation libs.compose.ui.tooling.preview
-	debugImplementation libs.compose.ui.tooling
 	implementation libs.activity.compose
-	implementation libs.lifecycle.viewmodel.compose
-	implementation libs.retrofit
+	debugImplementation libs.compose.ui.tooling
+
 
 	testImplementation libs.junit
 	androidTestImplementation libs.androidx.junit
+	androidTestImplementation libs.androidx.espresso.core
 }
