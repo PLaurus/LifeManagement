@@ -95,30 +95,30 @@ fun <T> AiGraph(
 			val columnWidth = columnIndexToWidth[columnIndex] ?: 0
 			itemX += itemPaddingLeft
 			
-			// Упрощаем сортировку - порядок элементов сохраняется как в исходном списке
 			val sortedItems = columnItems.sortedBy { items.indexOf(it) }
 			
 			var itemY = 0
 			sortedItems.forEach { item ->
-				// Учитываем только родителей из предыдущих колонок
 				val parentsFromPreviousColumns = parentsMap[item]
 					?.filter { parent -> itemColumn(parent) < columnIndex }
 					.orEmpty()
 				
+				// Берем Y родителя БЕЗ смещения к центру
 				val parentBasedY = parentsFromPreviousColumns.maxOfOrNull { parent ->
-					(itemPositions[parent]?.y ?: 0) +
-							(itemToPlaceableMap[parent]?.height ?: 0) +
-							itemPaddingVertical
+					itemPositions[parent]?.y ?: 0 // <-- Убрано деление на 2
 				} ?: 0
 				
-				// Устанавливаем Y как максимум между позицией родителя и текущей позицией в колонке
-				itemY = maxOf(itemY, parentBasedY)
+				val startY = when {
+					parentsFromPreviousColumns.isNotEmpty() -> parentBasedY
+					else -> itemY
+				}
 				
 				// Фиксируем позицию элемента
+				itemY = maxOf(itemY, startY)
 				itemPositions[item] = IntOffset(x = itemX, y = itemY)
 				
-				// Обновляем Y для следующего элемента
-				itemY += (itemToPlaceableMap[item]?.height ?: 0) + itemPaddingVertical
+				// Добавляем только нижний отступ и высоту элемента
+				itemY += (itemToPlaceableMap[item]?.height ?: 0) + itemPaddingBottom
 			}
 			
 			itemX += columnWidth + itemPaddingRight
