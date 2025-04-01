@@ -47,6 +47,20 @@ fun <T> AiGraph(
 	SubcomposeLayout(
 		modifier = modifier
 	) { constraints ->
+		val itemPaddingLeft = itemPadding.calculateLeftPadding(layoutDirection)
+		val itemPaddingTop = itemPadding.calculateTopPadding()
+		val itemPaddingRight = itemPadding.calculateRightPadding(layoutDirection)
+		val itemPaddingBottom = itemPadding.calculateBottomPadding()
+		val itemPaddingHorizontal = itemPaddingLeft + itemPaddingRight
+		val itemPaddingVertical = itemPaddingTop + itemPaddingBottom
+		
+		val contentPaddingLeft = contentPadding.calculateLeftPadding(layoutDirection)
+		val contentPaddingTop = contentPadding.calculateTopPadding()
+		val contentPaddingRight = contentPadding.calculateRightPadding(layoutDirection)
+		val contentPaddingBottom = contentPadding.calculateBottomPadding()
+		val contentPaddingHorizontal = contentPaddingLeft + contentPaddingRight
+		val contentPaddingVertical = contentPaddingTop + contentPaddingBottom
+		
 		val itemMeasurables = subcompose(GraphSlot.ITEMS) {
 			items.forEach { item -> item(item) }
 		}
