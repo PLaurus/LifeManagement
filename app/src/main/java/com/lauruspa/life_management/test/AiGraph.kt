@@ -85,20 +85,44 @@ fun <T> AiGraph(
 		
 		val itemPositions = mutableMapOf<T, IntOffset>()
 		var itemX = 0
-		columns.forEach { (columnIndex, items) ->
-			val columnWidth = columnIndexToWidth[columnIndex] ?: 0
-			itemX += itemPaddingLeft
-			var itemY = 0
-			items.forEach { item ->
-				val isRoot = items.none { otherItem -> linked(otherItem, item) }
-				val itemHeight = itemToPlaceableMap[item]?.height ?: 0
-				itemY += itemPaddingTop
-				itemPositions[item] = IntOffset(x = itemX, y = itemY)
-				itemY += itemHeight + itemPaddingBottom
-			}
-			itemX += columnWidth + itemPaddingRight
+		// Собираем информацию о родителях для каждого элемента
+		// Создаем карту родителей для каждого элемента
+		val parentsMap = items.associateWith { item ->
+			items.filter { parent -> linked(parent, item) }
 		}
 		
+		columns.toSortedMap().forEach { (columnIndex, columnItems) ->
+			val columnWidth = columnIndexToWidth[columnIndex] ?: 0
+			itemX += itemPaddingLeft
+			
+			// Упрощаем сортировку - порядок элементов сохраняется как в исходном списке
+			val sortedItems = columnItems.sortedBy { items.indexOf(it) }
+			
+			var itemY = 0
+			sortedItems.forEach { item ->
+				// Учитываем только родителей из предыдущих колонок
+				val parentsFromPreviousColumns = parentsMap[item]
+					?.filter { parent -> itemColumn(parent) < columnIndex }
+					.orEmpty()
+				
+				val parentBasedY = parentsFromPreviousColumns.maxOfOrNull { parent ->
+					(itemPositions[parent]?.y ?: 0) +
+							(itemToPlaceableMap[parent]?.height ?: 0) +
+							itemPaddingVertical
+				} ?: 0
+				
+				// Устанавливаем Y как максимум между позицией родителя и текущей позицией в колонке
+				itemY = maxOf(itemY, parentBasedY)
+				
+				// Фиксируем позицию элемента
+				itemPositions[item] = IntOffset(x = itemX, y = itemY)
+				
+				// Обновляем Y для следующего элемента
+				itemY += (itemToPlaceableMap[item]?.height ?: 0) + itemPaddingVertical
+			}
+			
+			itemX += columnWidth + itemPaddingRight
+		}
 		
 		val nodes: List<Node<T>> = items.mapNotNull { item ->
 			Node(
@@ -315,7 +339,13 @@ private fun AiGraphPreview() {
 		},
 		linked = { item1, item2 ->
 			item1 == 15 && item2 == 26 ||
+			item1 == 15 && item2 == 1 ||
 			item1 == 26 && item2 == 22 ||
+			item1 == 26 && item2 == 2 ||
+			item1 == 7 && item2 == 3 ||
+			item1 == 7 && item2 == 8 ||
+			item1 == 8 && item2 == 49 ||
+			item1 == 49 && item2 == 50 ||
 					false
 		},
 		
