@@ -47,17 +47,17 @@ fun <T> AiGraph(
 	SubcomposeLayout(
 		modifier = modifier
 	) { constraints ->
-		val itemPaddingLeft = itemPadding.calculateLeftPadding(layoutDirection)
-		val itemPaddingTop = itemPadding.calculateTopPadding()
-		val itemPaddingRight = itemPadding.calculateRightPadding(layoutDirection)
-		val itemPaddingBottom = itemPadding.calculateBottomPadding()
+		val itemPaddingLeft = itemPadding.calculateLeftPadding(layoutDirection).roundToPx()
+		val itemPaddingTop = itemPadding.calculateTopPadding().roundToPx()
+		val itemPaddingRight = itemPadding.calculateRightPadding(layoutDirection).roundToPx()
+		val itemPaddingBottom = itemPadding.calculateBottomPadding().roundToPx()
 		val itemPaddingHorizontal = itemPaddingLeft + itemPaddingRight
 		val itemPaddingVertical = itemPaddingTop + itemPaddingBottom
 		
-		val contentPaddingLeft = contentPadding.calculateLeftPadding(layoutDirection)
-		val contentPaddingTop = contentPadding.calculateTopPadding()
-		val contentPaddingRight = contentPadding.calculateRightPadding(layoutDirection)
-		val contentPaddingBottom = contentPadding.calculateBottomPadding()
+		val contentPaddingLeft = contentPadding.calculateLeftPadding(layoutDirection).roundToPx()
+		val contentPaddingTop = contentPadding.calculateTopPadding().roundToPx()
+		val contentPaddingRight = contentPadding.calculateRightPadding(layoutDirection).roundToPx()
+		val contentPaddingBottom = contentPadding.calculateBottomPadding().roundToPx()
 		val contentPaddingHorizontal = contentPaddingLeft + contentPaddingRight
 		val contentPaddingVertical = contentPaddingTop + contentPaddingBottom
 		
@@ -74,7 +74,39 @@ fun <T> AiGraph(
 			)
 		}
 		
-		val nodes: List<Node<T>> = TODO()
+		val columns = items.groupBy { item -> itemColumn(item) }
+		val itemToPlaceableMap = items.mapIndexed { index, item -> item to placeables[index] }
+			.toMap()
+		val columnIndexToWidth = columns.map { (columnIndex, columnItems) ->
+			columnIndex to (columnItems.maxOfOrNull { item ->
+				itemToPlaceableMap[item]?.width ?: 0
+			} ?: 0)
+		}.toMap()
+		
+		val itemPositions = mutableMapOf<T, IntOffset>()
+		var itemX = 0
+		columns.forEach { (columnIndex, items) ->
+			val columnWidth = columnIndexToWidth[columnIndex] ?: 0
+			itemX += itemPaddingLeft
+			var itemY = 0
+			items.forEach { item ->
+				val isRoot = items.none { otherItem -> linked(otherItem, item) }
+				val itemHeight = itemToPlaceableMap[item]?.height ?: 0
+				itemY += itemPaddingTop
+				itemPositions[item] = IntOffset(x = itemX, y = itemY)
+				itemY += itemHeight + itemPaddingBottom
+			}
+			itemX += columnWidth + itemPaddingRight
+		}
+		
+		
+		val nodes: List<Node<T>> = items.mapNotNull { item ->
+			Node(
+				item = item,
+				placeable = itemToPlaceableMap[item] ?: return@mapNotNull null,
+				position = itemPositions[item] ?: return@mapNotNull null
+			)
+		}
 		
 		val links = nodes.map { node ->
 			val linkedNodes = nodes
@@ -282,37 +314,9 @@ private fun AiGraphPreview() {
 			
 		},
 		linked = { item1, item2 ->
-			item1 == 0 && item2 == 1 ||
-					item1 == 5 && item2 == 6 ||
-					
-					item1 == 1 && item2 == 2 ||
-					item1 == 1 && item2 == 7 ||
-					item1 == 1 && item2 == 12 ||
-					item1 == 6 && item2 == 17 ||
-					
-					item1 == 2 && item2 == 3 ||
-					item1 == 12 && item2 == 13 ||
-					
-					item1 == 3 && item2 == 4 ||
-					item1 == 8 && item2 == 9 ||
-					item1 == 13 && item2 == 14 ||
-					item1 == 18 && item2 == 9 ||
-					
-					item1 == 4 && item2 == 50 ||
-					item1 == 9 && item2 == 50 ||
-					item1 == 14 && item2 == 50 ||
-					
-					item1 == 50 && item2 == 55 ||
-					item1 == 50 && item2 == 60 ||
-					
-					item1 == 55 && item2 == 51 ||
-					
-					item1 == 51 && item2 == 52 ||
-					
-					item1 == 52 && item2 == 53 ||
-					item1 == 9 && item2 == 18 ||
-					
-					item1 == 53 && item2 == 54
+			item1 == 15 && item2 == 26 ||
+			item1 == 26 && item2 == 22 ||
+					false
 		},
 		
 		modifier = Modifier
