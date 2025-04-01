@@ -47,43 +47,46 @@ fun <T> AiGraph(
 	SubcomposeLayout(
 		modifier = modifier
 	) { constraints ->
-		// Измеряем все элементы
 		val itemMeasurables = subcompose(GraphSlot.ITEMS) {
 			items.forEach { item -> item(item) }
 		}
 		
-		// Группируем элементы по колонкам
 		val columns = items.groupBy { itemColumn(it) }
 			.toSortedMap()
 			.values
 			.toList()
 		
-		// Рассчитываем позиции для каждой колонки
-		var xPos = contentPadding.calculateLeftPadding(layoutDirection).roundToPx()
+		val columnIndices = columns.map { col -> itemColumn(col.first()) }
+		
+		var xPos = contentPadding.calculateLeftPadding(layoutDirection)
+			.roundToPx()
 		val columnWidths = mutableListOf<Int>()
 		val nodePositions = mutableListOf<GraphNode<T>>()
 		
-		columns.forEach { columnItems ->
-			var yPos = contentPadding.calculateTopPadding().roundToPx()
+		columns.forEachIndexed { i, columnItems ->
+			val columnIndexCurrent = columnIndices[i]
+			var yPos = contentPadding.calculateTopPadding()
+				.roundToPx()
 			val columnNodes = mutableListOf<Placeable>()
 			
-			// Рассчитываем доступную ширину для колонки с учетом общего padding
 			val columnWidth = (constraints.maxWidth
-					- contentPadding.calculateLeftPadding(layoutDirection).roundToPx()
-					- contentPadding.calculateRightPadding(layoutDirection).roundToPx()
+					- contentPadding.calculateLeftPadding(layoutDirection)
+				.roundToPx()
+					- contentPadding.calculateRightPadding(layoutDirection)
+				.roundToPx()
 					) / columns.size
 			
-			// Горизонтальные отступы элемента (left + right)
 			val itemHorizontalPadding =
-				itemPadding.calculateLeftPadding(layoutDirection).roundToPx() +
-						itemPadding.calculateRightPadding(layoutDirection).roundToPx()
+				itemPadding.calculateLeftPadding(layoutDirection)
+					.roundToPx() +
+						itemPadding.calculateRightPadding(layoutDirection)
+							.roundToPx()
 			
-			// Измеряем элементы с учетом их внутренних отступов
 			columnItems.forEach { item ->
 				val measurable = itemMeasurables[items.indexOf(item)]
 				val placeable = measurable.measure(
 					constraints.copy(
-						maxWidth = columnWidth - itemHorizontalPadding, // Учет горизонтальных отступов
+						maxWidth = columnWidth - itemHorizontalPadding,
 						minWidth = 0,
 						minHeight = 0
 					)
@@ -91,18 +94,23 @@ fun <T> AiGraph(
 				columnNodes.add(placeable)
 			}
 			
-			// Ширина колонки = макс. ширина элемента + его отступы
 			val maxColumnWidth = columnNodes.maxOf { it.width } + itemHorizontalPadding
 			columnWidths.add(maxColumnWidth)
 			
-			// Располагаем элементы с отступами
 			columnItems.forEachIndexed { index, item ->
 				val placeable = columnNodes[index]
 				val padding = itemPadding
-				yPos += padding.calculateTopPadding().roundToPx()
+				yPos += padding.calculateTopPadding()
+					.roundToPx()
 				
-				// Добавляем горизонтальный отступ слева к позиции
-				val xItemPos = xPos + padding.calculateLeftPadding(layoutDirection).roundToPx()
+				val parents = nodePositions.filter { parentNode ->
+					linked(parentNode.info.data, item) && parentNode.info.columnIndex < columnIndexCurrent
+				}
+				val maxParentY = parents.maxOfOrNull { it.position.y } ?: 0
+				yPos = maxOf(yPos, maxParentY)
+				
+				val xItemPos = xPos + padding.calculateLeftPadding(layoutDirection)
+					.roundToPx()
 				
 				nodePositions.add(
 					GraphNode(
@@ -112,7 +120,8 @@ fun <T> AiGraph(
 					)
 				)
 				
-				yPos += placeable.height + padding.calculateBottomPadding().roundToPx()
+				yPos += placeable.height + padding.calculateBottomPadding()
+					.roundToPx()
 			}
 			
 			xPos += maxColumnWidth + contentPadding.calculateRightPadding(layoutDirection)
@@ -198,7 +207,8 @@ fun <T> AiGraph(
 					end = lineEnd
 				)
 			}
-		}.flatten()
+		}
+			.flatten()
 		
 		val linesPlaceable = subcompose(GraphSlot.LINES) {
 			Canvas(
@@ -220,14 +230,12 @@ fun <T> AiGraph(
 					)
 				}
 			}
-		}.first().measure(constraints.copy(minWidth = 0, minHeight = 0))
+		}.first()
+			.measure(constraints.copy(minWidth = 0, minHeight = 0))
 		
 		layout(constraints.maxWidth, constraints.maxHeight) {
 			linesPlaceable.place(0, 0)
-			
-			nodes.forEach { node ->
-				node.placeable.place(node.position)
-			}
+			nodes.forEach { node -> node.placeable.place(node.position) }
 		}
 	}
 }
@@ -334,10 +342,12 @@ private fun AiGraphPreview() {
 		},
 		linked = { item1, item2 ->
 			item1 == 0 && item2 == 1 ||
+					item1 == 5 && item2 == 6 ||
 					
 					item1 == 1 && item2 == 2 ||
 					item1 == 1 && item2 == 7 ||
 					item1 == 1 && item2 == 12 ||
+					item1 == 6 && item2 == 17 ||
 					
 					item1 == 2 && item2 == 3 ||
 					item1 == 12 && item2 == 13 ||
@@ -345,13 +355,16 @@ private fun AiGraphPreview() {
 					item1 == 3 && item2 == 4 ||
 					item1 == 8 && item2 == 9 ||
 					item1 == 13 && item2 == 14 ||
+					item1 == 18 && item2 == 9 ||
 					
 					item1 == 4 && item2 == 50 ||
 					item1 == 9 && item2 == 50 ||
 					item1 == 14 && item2 == 50 ||
 					
-					item1 == 50 && item2 == 51 ||
-					item1 == 50 && item2 == 56 ||
+					item1 == 50 && item2 == 55 ||
+					item1 == 50 && item2 == 60 ||
+					
+					item1 == 55 && item2 == 51 ||
 					
 					item1 == 51 && item2 == 52 ||
 					
