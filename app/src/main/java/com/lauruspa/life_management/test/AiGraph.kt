@@ -362,21 +362,13 @@ private fun AiGraphPreview() {
 			item1 == 0 && item2 == 1 ||
 					item1 == 6 && item2 == 7 ||
 					item1 == 6 && item2 == 7 ||
-//			item1 == 15 && item2 == 1 ||
-//			item1 == 20 && item2 == 31 ||
 					item1 == 0 && item2 == 6 ||
 					item1 == 5 && item2 == 11 ||
 					item1 == 5 && item2 == 16 ||
 					item1 == 5 && item2 == 21 ||
-//			item1 == 26 && item2 == 22 ||
-//			item1 == 26 && item2 == 2 ||
-//			item1 == 7 && item2 == 3 ||
-//			item1 == 7 && item2 == 8 ||
-//			item1 == 8 && item2 == 49 ||
-//			item1 == 49 && item2 == 50 ||
-//			item1 == 50 && item2 == 55 ||
-//			item1 == 55 && item2 == 61 ||
-//			item1 == 55 && item2 == 66 ||
+					item1 == 5 && item2 == 21 ||
+					item1 == 26 && item2 == 27 ||
+					item1 == 10 && item2 == 31 ||
 					false
 		},
 		
