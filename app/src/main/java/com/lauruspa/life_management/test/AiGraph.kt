@@ -47,99 +47,118 @@ fun <T> AiGraph(
 	SubcomposeLayout(
 		modifier = modifier
 	) { constraints ->
-		val itemPaddingLeft = itemPadding.calculateLeftPadding(layoutDirection).roundToPx()
-		val itemPaddingTop = itemPadding.calculateTopPadding().roundToPx()
-		val itemPaddingRight = itemPadding.calculateRightPadding(layoutDirection).roundToPx()
-		val itemPaddingBottom = itemPadding.calculateBottomPadding().roundToPx()
+		val itemPaddingLeft = itemPadding.calculateLeftPadding(layoutDirection)
+			.roundToPx()
+		val itemPaddingTop = itemPadding.calculateTopPadding()
+			.roundToPx()
+		val itemPaddingRight = itemPadding.calculateRightPadding(layoutDirection)
+			.roundToPx()
+		val itemPaddingBottom = itemPadding.calculateBottomPadding()
+			.roundToPx()
 		val itemPaddingHorizontal = itemPaddingLeft + itemPaddingRight
 		val itemPaddingVertical = itemPaddingTop + itemPaddingBottom
 		
-		val contentPaddingLeft = contentPadding.calculateLeftPadding(layoutDirection).roundToPx()
-		val contentPaddingTop = contentPadding.calculateTopPadding().roundToPx()
-		val contentPaddingRight = contentPadding.calculateRightPadding(layoutDirection).roundToPx()
-		val contentPaddingBottom = contentPadding.calculateBottomPadding().roundToPx()
-		val contentPaddingHorizontal = contentPaddingLeft + contentPaddingRight
-		val contentPaddingVertical = contentPaddingTop + contentPaddingBottom
+		val contentPaddingLeft = contentPadding.calculateLeftPadding(layoutDirection)
+			.roundToPx()
+		val contentPaddingTop = contentPadding.calculateTopPadding()
+			.roundToPx()
+		val contentPaddingRight = contentPadding.calculateRightPadding(layoutDirection)
+			.roundToPx()
 		
 		val itemMeasurables = subcompose(GraphSlot.ITEMS) {
 			items.forEach { item -> item(item) }
 		}
 		
 		val placeables = itemMeasurables.map { measurable ->
-			measurable.measure(
-				constraints.copy(
-					minWidth = 0,
-					minHeight = 0
-				)
-			)
+			measurable.measure(constraints.copy(minWidth = 0, minHeight = 0))
 		}
 		
-		val columns = items.groupBy { item -> itemColumn(item) }
+		val columns = items.groupBy { itemColumn(it) }
+			.toSortedMap()
 		val itemToPlaceableMap = items.mapIndexed { index, item -> item to placeables[index] }
 			.toMap()
-		val columnIndexToWidth = columns.map { (columnIndex, columnItems) ->
-			columnIndex to (columnItems.maxOfOrNull { item ->
-				itemToPlaceableMap[item]?.width ?: 0
-			} ?: 0)
-		}.toMap()
+		val columnIndexToWidth = columns.mapValues { (_, items) ->
+			items.maxOfOrNull { itemToPlaceableMap[it]?.width ?: 0 } ?: 0
+		}
+		
+		// Создаем карту: элемент -> следующий элемент в колонке
+		val nextItemInColumn = mutableMapOf<T, T?>()
+		columns.values.forEach { columnItems ->
+			columnItems.sortedBy { it.hashCode() }
+				.forEachIndexed { index, item ->
+					nextItemInColumn[item] = columnItems.getOrNull(index + 1)
+				}
+		}
+		
+		// ccc
+		
+		// Структура для хранения порядка элементов в колонках
+		val columnOrder = mutableMapOf<Int, List<T>>()
+		
+		// Заполняем порядок элементов в колонках (без сортировки)
+		columns.forEach { (columnIndex, columnItems) ->
+			columnOrder[columnIndex] = columnItems
+		}
 		
 		val itemPositions = mutableMapOf<T, IntOffset>()
-		var itemX = 0
-		// Собираем информацию о родителях для каждого элемента
-		// Создаем карту родителей для каждого элемента
 		val parentsMap = items.associateWith { item ->
 			items.filter { parent -> linked(parent, item) }
 		}
 		
-		columns.toSortedMap().forEach { (currentColumnIndex, columnItems) ->
-			val columnWidth = columnIndexToWidth[currentColumnIndex] ?: 0
-			itemX += itemPaddingLeft
-			
-			// Сортируем элементы: сначала те, у которых есть родители в предыдущих колонках
-			val sortedItems = columnItems.sortedBy { item ->
-				val hasParentInPreviousColumn = parentsMap[item]?.any { parent ->
-					itemColumn(parent) < currentColumnIndex
-				} ?: false
-				if (hasParentInPreviousColumn) 0 else 1
-			}
-			
-			var itemY = 0
-			sortedItems.forEach { item ->
-				// Получаем всех родителей из предыдущих колонок
-				val parentsFromPreviousColumns = parentsMap[item]
-					?.filter { parent -> itemColumn(parent) < currentColumnIndex }
-					.orEmpty()
+		// Обработка колонок в порядке возрастания (от первой к последней)
+		columns.keys.sorted()
+			.forEach { currentColumnIndex ->
+				val columnItems = columnOrder[currentColumnIndex] ?: emptyList()
+				val columnWidth = columnIndexToWidth[currentColumnIndex] ?: 0
 				
-				// Если это первый элемент в колонке и есть родители
-				val isFirstWithParent = sortedItems.indexOf(item) == 0 && parentsFromPreviousColumns.isNotEmpty()
+				// Стартовая X для текущей колонки
+				val itemX = columns.keys
+					.filter { it < currentColumnIndex }
+					.sumOf { (columnIndexToWidth[it] ?: 0) + itemPaddingHorizontal } + contentPaddingLeft
 				
-				// Y-координата родителя (если есть)
-				val parentY = parentsFromPreviousColumns.maxOfOrNull { parent ->
-					itemPositions[parent]?.y ?: 0
-				} ?: 0
+				var currentY = contentPaddingTop
 				
-				// Определяем стартовую Y-координату
-				val startY = when {
-					isFirstWithParent -> parentY // Привязка к родителю
-					else -> maxOf(itemY, parentY) // Максимум между текущей позицией и родителем
+				columnItems.forEach { item ->
+					// Фиксация позиции текущего элемента
+					itemPositions[item] = IntOffset(itemX, currentY)
+					
+					// Получаем всех родителей из предыдущих колонок
+					val parents = parentsMap[item]?.filter { itemColumn(it) < currentColumnIndex }
+						.orEmpty()
+					
+					parents.forEach { parent ->
+						// Находим индекс родителя в его колонке
+						val parentColumn = itemColumn(parent)
+						val parentColumnItems = columnOrder[parentColumn] ?: emptyList()
+						val parentIndex = parentColumnItems.indexOf(parent)
+						
+						// Смещаем все элементы после родителя в его колонке
+						if (parentIndex != -1) {
+							val itemsToShift = parentColumnItems.subList(parentIndex + 1, parentColumnItems.size)
+							var shiftY = currentY + (itemToPlaceableMap[item]?.height ?: 0) + itemPaddingVertical
+							
+							itemsToShift.forEach { shiftedItem ->
+								val newY = maxOf(
+									itemPositions[shiftedItem]?.y ?: 0,
+									shiftY
+								)
+								itemPositions[shiftedItem] = IntOffset(
+									itemPositions[shiftedItem]?.x ?: 0,
+									newY
+								)
+								shiftY = newY + (itemToPlaceableMap[shiftedItem]?.height ?: 0) + itemPaddingVertical
+							}
+						}
+					}
+					
+					currentY += (itemToPlaceableMap[item]?.height ?: 0) + itemPaddingVertical
 				}
-				
-				// Фиксируем позицию элемента
-				itemPositions[item] = IntOffset(x = itemX, y = startY)
-				
-				// Обновляем Y для следующих элементов
-				itemY = startY + (itemToPlaceableMap[item]?.height ?: 0) + itemPaddingVertical
 			}
-			
-			itemX += columnWidth + itemPaddingRight
-		}
 		
-		val nodes: List<Node<T>> = items.mapNotNull { item ->
-			Node(
-				item = item,
-				placeable = itemToPlaceableMap[item] ?: return@mapNotNull null,
-				position = itemPositions[item] ?: return@mapNotNull null
-			)
+		val nodes = items.mapNotNull { item ->
+			itemToPlaceableMap[item]?.let { placeable ->
+				Node(item, placeable, itemPositions[item] ?: IntOffset.Zero)
+			}
 		}
 		
 		val links = nodes.map { node ->
@@ -348,17 +367,24 @@ private fun AiGraphPreview() {
 			
 		},
 		linked = { item1, item2 ->
-			item1 == 15 && item2 == 26 ||
-			item1 == 15 && item2 == 1 ||
-			item1 == 26 && item2 == 22 ||
-			item1 == 26 && item2 == 2 ||
-			item1 == 7 && item2 == 3 ||
-			item1 == 7 && item2 == 8 ||
-			item1 == 8 && item2 == 49 ||
-			item1 == 49 && item2 == 50 ||
-			item1 == 50 && item2 == 55 ||
-			item1 == 55 && item2 == 61 ||
-			item1 == 55 && item2 == 66 ||
+			item1 == 0 && item2 == 1 ||
+					item1 == 6 && item2 == 7 ||
+					item1 == 6 && item2 == 7 ||
+//			item1 == 15 && item2 == 1 ||
+//			item1 == 20 && item2 == 31 ||
+					item1 == 0 && item2 == 6 ||
+					item1 == 5 && item2 == 11 ||
+					item1 == 5 && item2 == 16 ||
+					item1 == 5 && item2 == 21 ||
+//			item1 == 26 && item2 == 22 ||
+//			item1 == 26 && item2 == 2 ||
+//			item1 == 7 && item2 == 3 ||
+//			item1 == 7 && item2 == 8 ||
+//			item1 == 8 && item2 == 49 ||
+//			item1 == 49 && item2 == 50 ||
+//			item1 == 50 && item2 == 55 ||
+//			item1 == 55 && item2 == 61 ||
+//			item1 == 55 && item2 == 66 ||
 					false
 		},
 		
