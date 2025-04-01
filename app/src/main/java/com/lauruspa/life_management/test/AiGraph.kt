@@ -1,12 +1,10 @@
 package com.lauruspa.life_management.test
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -14,20 +12,12 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.PathEffect
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.Placeable
 import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.toOffset
 
 @Composable
 fun <T> AiGraph(
@@ -40,8 +30,6 @@ fun <T> AiGraph(
 		horizontal = 16.dp,
 		vertical = 4.dp
 	),
-	sameColumnLinkPadding: Dp = 16.dp,
-	sameColumnLinkSideOnTheRight: (item1: T, item2: T) -> Boolean = { _, _ -> true },
 	item: @Composable (item: T) -> Unit
 ) {
 	SubcomposeLayout(
@@ -99,8 +87,7 @@ fun <T> AiGraph(
 			
 			columnItems.forEachIndexed { index, item ->
 				val placeable = columnNodes[index]
-				val padding = itemPadding
-				yPos += padding.calculateTopPadding()
+				yPos += itemPadding.calculateTopPadding()
 					.roundToPx()
 				
 				val parents = nodePositions.filter { parentNode ->
@@ -109,7 +96,7 @@ fun <T> AiGraph(
 				val maxParentY = parents.maxOfOrNull { it.position.y } ?: 0
 				yPos = maxOf(yPos, maxParentY)
 				
-				val xItemPos = xPos + padding.calculateLeftPadding(layoutDirection)
+				val xItemPos = xPos + itemPadding.calculateLeftPadding(layoutDirection)
 					.roundToPx()
 				
 				nodePositions.add(
@@ -120,7 +107,7 @@ fun <T> AiGraph(
 					)
 				)
 				
-				yPos += placeable.height + padding.calculateBottomPadding()
+				yPos += placeable.height + itemPadding.calculateBottomPadding()
 					.roundToPx()
 			}
 			
@@ -128,168 +115,15 @@ fun <T> AiGraph(
 				.roundToPx()
 		}
 		
-		val nodes = nodePositions
-		
-		val links = nodes.map { node ->
-			val linkedNodes = nodes
-				.filter { otherNode -> linked(node.info.data, otherNode.info.data) }
-			
-			linkedNodes.map { linkedNode ->
-				val lineStart: IntOffset
-				val lineCenter: IntOffset
-				val lineEnd: IntOffset
-				
-				// Linked node is on the same X
-				if (node.position.x == linkedNode.position.x) {
-					val linkSideIsOnTheRight = sameColumnLinkSideOnTheRight(
-						node.info.data,
-						linkedNode.info.data
-					)
-					
-					if (linkSideIsOnTheRight) {
-						lineStart = IntOffset(
-							x = node.position.x + node.placeable.width,
-							y = node.position.y + node.placeable.height / 2
-						)
-						lineEnd = IntOffset(
-							x = linkedNode.position.x + node.placeable.width,
-							y = linkedNode.position.y + linkedNode.placeable.height / 2
-						)
-						lineCenter = IntOffset(
-							x = lineStart.x + sameColumnLinkPadding.roundToPx(),
-							y = lineStart.y + (lineEnd.y - lineStart.y) / 2
-						)
-					} else {
-						lineStart = IntOffset(
-							x = node.position.x,
-							y = node.position.y + node.placeable.height / 2
-						)
-						lineEnd = IntOffset(
-							x = linkedNode.position.x,
-							y = linkedNode.position.y + linkedNode.placeable.height / 2
-						)
-						lineCenter = IntOffset(
-							x = lineStart.x - sameColumnLinkPadding.roundToPx(),
-							y = lineStart.y + (lineEnd.y - lineStart.y) / 2
-						)
-					}
-				} else {
-					if (node.position.x < linkedNode.position.x) {
-						lineStart = IntOffset(
-							x = node.position.x + node.placeable.width,
-							y = node.position.y + node.placeable.height / 2
-						)
-						lineEnd = IntOffset(
-							x = linkedNode.position.x,
-							y = linkedNode.position.y + linkedNode.placeable.height / 2
-						)
-					} else {
-						lineStart = IntOffset(
-							x = node.position.x,
-							y = node.position.y + node.placeable.height / 2
-						)
-						
-						lineEnd = IntOffset(
-							x = linkedNode.position.x + linkedNode.placeable.width,
-							y = linkedNode.position.y + linkedNode.placeable.height / 2
-						)
-					}
-					
-					lineCenter = IntOffset(
-						x = lineStart.x + (lineEnd.x - lineStart.x) / 2,
-						y = lineStart.y + (lineEnd.y - lineStart.y) / 2
-					)
-				}
-				
-				Link(
-					start = lineStart,
-					center = lineCenter,
-					end = lineEnd
-				)
-			}
-		}
-			.flatten()
-		
-		val linesPlaceable = subcompose(GraphSlot.LINES) {
-			Canvas(
-				Modifier.size(
-					width = constraints.maxWidth.toDp(),
-					height = constraints.maxHeight.toDp()
-				)
-			) {
-				links.forEach { link ->
-					drawArrow(
-						start = link.start.toOffset(),
-						center = link.center.toOffset(),
-						end = link.end.toOffset(),
-						color = Color.Gray,
-						maxCornerRadiusPx = 8.dp.toPx(),
-						lineWidthPx = 1.dp.toPx(),
-						triangleLengthPx = 3.dp.toPx(),
-						triangleWidthPx = 7.dp.toPx()
-					)
-				}
-			}
-		}.first()
-			.measure(constraints.copy(minWidth = 0, minHeight = 0))
-		
 		layout(constraints.maxWidth, constraints.maxHeight) {
-			linesPlaceable.place(0, 0)
-			nodes.forEach { node -> node.placeable.place(node.position) }
+			
+			nodePositions.forEach { node -> node.placeable.place(node.position) }
 		}
 	}
 }
 
-private fun DrawScope.drawArrow(
-	start: Offset,
-	center: Offset,
-	end: Offset,
-	color: Color,
-	maxCornerRadiusPx: Float,
-	lineWidthPx: Float,
-	triangleLengthPx: Float,
-	triangleWidthPx: Float
-) {
-	val path = Path()
-	path.moveTo(start.x, start.y)
-	
-	path.lineTo(center.x, start.y)
-	val lastLineSegmentStart = Offset(x = center.x, end.y)
-	path.lineTo(lastLineSegmentStart.x, lastLineSegmentStart.y)
-	path.lineTo(end.x, end.y)
-	
-	drawPath(
-		path = path,
-		color = color,
-		style = Stroke(
-			width = lineWidthPx,
-			pathEffect = PathEffect.cornerPathEffect(maxCornerRadiusPx)
-		)
-	)
-	
-	val isRight = if (end.x - lastLineSegmentStart.x >= 0) 1 else -1
-	val triangleBottomX = end.x - isRight * triangleLengthPx
-	val triangleHalfWidth = triangleWidthPx / 2
-	path.rewind()
-	path.moveTo(triangleBottomX, end.y - triangleHalfWidth)
-	path.lineTo(end.x, end.y)
-	path.lineTo(triangleBottomX, end.y + triangleHalfWidth)
-	
-	drawPath(
-		path = path,
-		color = color,
-		style = Stroke(
-			width = lineWidthPx,
-			cap = StrokeCap.Round,
-			pathEffect = PathEffect.cornerPathEffect(lineWidthPx)
-		)
-	)
-}
-
 private enum class GraphSlot {
-	ITEMS,
-	LINES,
-	DEBUG
+	ITEMS
 }
 
 private data class GraphItem<T>(
@@ -302,12 +136,6 @@ private data class GraphNode<T>(
 	val info: GraphItem<T>,
 	val placeable: Placeable,
 	val position: IntOffset
-)
-
-private data class Link(
-	val start: IntOffset,
-	val center: IntOffset,
-	val end: IntOffset
 )
 
 @Preview(
@@ -373,10 +201,7 @@ private fun AiGraphPreview() {
 					
 					item1 == 53 && item2 == 54
 		},
-		sameColumnLinkSideOnTheRight = { item1, item2 ->
-			val columnIndex = itemLevel(item1)
-			columnIndex < 0
-		},
+		
 		modifier = Modifier
 			.fillMaxSize()
 			.background(Color.LightGray)
