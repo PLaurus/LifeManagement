@@ -39,85 +39,19 @@ fun <T> AiGraph(
 			items.forEach { item -> item(item) }
 		}
 		
-		val columns = items.groupBy { itemColumn(it) }
-			.toSortedMap()
-			.values
-			.toList()
-		
-		val columnIndices = columns.map { col -> itemColumn(col.first()) }
-		
-		var xPos = contentPadding.calculateLeftPadding(layoutDirection)
-			.roundToPx()
-		val columnWidths = mutableListOf<Int>()
-		val nodePositions = mutableListOf<GraphNode<T>>()
-		
-		columns.forEachIndexed { i, columnItems ->
-			val columnIndexCurrent = columnIndices[i]
-			var yPos = contentPadding.calculateTopPadding()
-				.roundToPx()
-			val columnNodes = mutableListOf<Placeable>()
-			
-			val columnWidth = (constraints.maxWidth
-					- contentPadding.calculateLeftPadding(layoutDirection)
-				.roundToPx()
-					- contentPadding.calculateRightPadding(layoutDirection)
-				.roundToPx()
-					) / columns.size
-			
-			val itemHorizontalPadding =
-				itemPadding.calculateLeftPadding(layoutDirection)
-					.roundToPx() +
-						itemPadding.calculateRightPadding(layoutDirection)
-							.roundToPx()
-			
-			columnItems.forEach { item ->
-				val measurable = itemMeasurables[items.indexOf(item)]
-				val placeable = measurable.measure(
-					constraints.copy(
-						maxWidth = columnWidth - itemHorizontalPadding,
-						minWidth = 0,
-						minHeight = 0
-					)
+		val placeables = itemMeasurables.map { measurable ->
+			measurable.measure(
+				constraints.copy(
+					minWidth = 0,
+					minHeight = 0
 				)
-				columnNodes.add(placeable)
-			}
-			
-			val maxColumnWidth = columnNodes.maxOf { it.width } + itemHorizontalPadding
-			columnWidths.add(maxColumnWidth)
-			
-			columnItems.forEachIndexed { index, item ->
-				val placeable = columnNodes[index]
-				yPos += itemPadding.calculateTopPadding()
-					.roundToPx()
-				
-				val parents = nodePositions.filter { parentNode ->
-					linked(parentNode.info.data, item) && parentNode.info.columnIndex < columnIndexCurrent
-				}
-				val maxParentY = parents.maxOfOrNull { it.position.y } ?: 0
-				yPos = maxOf(yPos, maxParentY)
-				
-				val xItemPos = xPos + itemPadding.calculateLeftPadding(layoutDirection)
-					.roundToPx()
-				
-				nodePositions.add(
-					GraphNode(
-						info = GraphItem(item, emptyList(), itemColumn(item)),
-						placeable = placeable,
-						position = IntOffset(xItemPos, yPos)
-					)
-				)
-				
-				yPos += placeable.height + itemPadding.calculateBottomPadding()
-					.roundToPx()
-			}
-			
-			xPos += maxColumnWidth + contentPadding.calculateRightPadding(layoutDirection)
-				.roundToPx()
+			)
 		}
 		
+		val nodes: List<GraphNode<T>> = TODO()
+		
 		layout(constraints.maxWidth, constraints.maxHeight) {
-			
-			nodePositions.forEach { node -> node.placeable.place(node.position) }
+			nodes.forEach { node -> node.placeable.place(node.position) }
 		}
 	}
 }
