@@ -91,34 +91,44 @@ fun <T> AiGraph(
 			items.filter { parent -> linked(parent, item) }
 		}
 		
-		columns.toSortedMap().forEach { (columnIndex, columnItems) ->
-			val columnWidth = columnIndexToWidth[columnIndex] ?: 0
+		columns.toSortedMap().forEach { (currentColumnIndex, columnItems) ->
+			val columnWidth = columnIndexToWidth[currentColumnIndex] ?: 0
 			itemX += itemPaddingLeft
 			
-			val sortedItems = columnItems.sortedBy { items.indexOf(it) }
+			// Сортируем элементы: сначала те, у которых есть родители в предыдущих колонках
+			val sortedItems = columnItems.sortedBy { item ->
+				val hasParentInPreviousColumn = parentsMap[item]?.any { parent ->
+					itemColumn(parent) < currentColumnIndex
+				} ?: false
+				if (hasParentInPreviousColumn) 0 else 1
+			}
 			
 			var itemY = 0
 			sortedItems.forEach { item ->
+				// Получаем всех родителей из предыдущих колонок
 				val parentsFromPreviousColumns = parentsMap[item]
-					?.filter { parent -> itemColumn(parent) < columnIndex }
+					?.filter { parent -> itemColumn(parent) < currentColumnIndex }
 					.orEmpty()
 				
-				// Берем Y родителя БЕЗ смещения к центру
-				val parentBasedY = parentsFromPreviousColumns.maxOfOrNull { parent ->
-					itemPositions[parent]?.y ?: 0 // <-- Убрано деление на 2
+				// Если это первый элемент в колонке и есть родители
+				val isFirstWithParent = sortedItems.indexOf(item) == 0 && parentsFromPreviousColumns.isNotEmpty()
+				
+				// Y-координата родителя (если есть)
+				val parentY = parentsFromPreviousColumns.maxOfOrNull { parent ->
+					itemPositions[parent]?.y ?: 0
 				} ?: 0
 				
+				// Определяем стартовую Y-координату
 				val startY = when {
-					parentsFromPreviousColumns.isNotEmpty() -> parentBasedY
-					else -> itemY
+					isFirstWithParent -> parentY // Привязка к родителю
+					else -> maxOf(itemY, parentY) // Максимум между текущей позицией и родителем
 				}
 				
 				// Фиксируем позицию элемента
-				itemY = maxOf(itemY, startY)
-				itemPositions[item] = IntOffset(x = itemX, y = itemY)
+				itemPositions[item] = IntOffset(x = itemX, y = startY)
 				
-				// Добавляем только нижний отступ и высоту элемента
-				itemY += (itemToPlaceableMap[item]?.height ?: 0) + itemPaddingBottom
+				// Обновляем Y для следующих элементов
+				itemY = startY + (itemToPlaceableMap[item]?.height ?: 0) + itemPaddingVertical
 			}
 			
 			itemX += columnWidth + itemPaddingRight
@@ -346,6 +356,9 @@ private fun AiGraphPreview() {
 			item1 == 7 && item2 == 8 ||
 			item1 == 8 && item2 == 49 ||
 			item1 == 49 && item2 == 50 ||
+			item1 == 50 && item2 == 55 ||
+			item1 == 55 && item2 == 61 ||
+			item1 == 55 && item2 == 66 ||
 					false
 		},
 		
