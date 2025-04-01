@@ -90,8 +90,6 @@ fun <T> AiGraph(
 				}
 		}
 		
-		// ccc
-		
 		// Структура для хранения порядка элементов в колонках
 		val columnOrder = mutableMapOf<Int, List<T>>()
 		
@@ -105,55 +103,49 @@ fun <T> AiGraph(
 			items.filter { parent -> linked(parent, item) }
 		}
 		
-		// Обработка колонок в порядке возрастания (от первой к последней)
-		columns.keys.sorted()
-			.forEach { currentColumnIndex ->
-				val columnItems = columnOrder[currentColumnIndex] ?: emptyList()
-				val columnWidth = columnIndexToWidth[currentColumnIndex] ?: 0
+		columns.keys.sorted().forEach { currentColumnIndex ->
+			val columnItems = columnOrder[currentColumnIndex] ?: emptyList()
+			val columnWidth = columnIndexToWidth[currentColumnIndex] ?: 0
+			
+			val itemX = columns.keys
+				.filter { it < currentColumnIndex }
+				.sumOf { (columnIndexToWidth[it] ?: 0) + itemPaddingHorizontal }+ contentPaddingLeft
+			
+			var currentY = contentPaddingTop
+			
+			columnItems.forEach { item ->
+				itemPositions[item] = IntOffset(itemX, currentY)
 				
-				// Стартовая X для текущей колонки
-				val itemX = columns.keys
-					.filter { it < currentColumnIndex }
-					.sumOf { (columnIndexToWidth[it] ?: 0) + itemPaddingHorizontal } + contentPaddingLeft
+				val parents = parentsMap[item]?.filter { itemColumn(it) < currentColumnIndex }.orEmpty()
 				
-				var currentY = contentPaddingTop
-				
-				columnItems.forEach { item ->
-					// Фиксация позиции текущего элемента
-					itemPositions[item] = IntOffset(itemX, currentY)
+				parents.forEach { parent ->
+					val parentColumn = itemColumn(parent)
+					val parentColumnItems = columnOrder[parentColumn] ?: emptyList()
+					val parentIndex = parentColumnItems.indexOf(parent)
 					
-					// Получаем всех родителей из предыдущих колонок
-					val parents = parentsMap[item]?.filter { itemColumn(it) < currentColumnIndex }
-						.orEmpty()
-					
-					parents.forEach { parent ->
-						// Находим индекс родителя в его колонке
-						val parentColumn = itemColumn(parent)
-						val parentColumnItems = columnOrder[parentColumn] ?: emptyList()
-						val parentIndex = parentColumnItems.indexOf(parent)
+					if (parentIndex != -1) {
+						val itemsToShift = parentColumnItems.subList(parentIndex + 1, parentColumnItems.size)
+						var shiftY = currentY + (itemToPlaceableMap[item]?.height ?: 0) + itemPaddingBottom
 						
-						// Смещаем все элементы после родителя в его колонке
-						if (parentIndex != -1) {
-							val itemsToShift = parentColumnItems.subList(parentIndex + 1, parentColumnItems.size)
-							var shiftY = currentY + (itemToPlaceableMap[item]?.height ?: 0) + itemPaddingVertical
-							
-							itemsToShift.forEach { shiftedItem ->
-								val newY = maxOf(
-									itemPositions[shiftedItem]?.y ?: 0,
-									shiftY
-								)
-								itemPositions[shiftedItem] = IntOffset(
-									itemPositions[shiftedItem]?.x ?: 0,
-									newY
-								)
-								shiftY = newY + (itemToPlaceableMap[shiftedItem]?.height ?: 0) + itemPaddingVertical
-							}
+						itemsToShift.forEach { shiftedItem ->
+							// Добавляем верхний отступ к новой позиции
+							val newY = maxOf(
+								itemPositions[shiftedItem]?.y ?: 0,
+								shiftY + itemPaddingTop
+							)
+							itemPositions[shiftedItem] = IntOffset(
+								itemPositions[shiftedItem]?.x ?: 0,
+								newY
+							)
+							// Обновляем shiftY с учетом нижнего отступа
+							shiftY = newY + (itemToPlaceableMap[shiftedItem]?.height ?: 0) + itemPaddingBottom
 						}
 					}
-					
-					currentY += (itemToPlaceableMap[item]?.height ?: 0) + itemPaddingVertical
 				}
+				
+				currentY += (itemToPlaceableMap[item]?.height ?: 0) + itemPaddingVertical
 			}
+		}
 		
 		val nodes = items.mapNotNull { item ->
 			itemToPlaceableMap[item]?.let { placeable ->
