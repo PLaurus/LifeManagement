@@ -1,4 +1,4 @@
-package com.lauruspa.life_management.test
+package com.lauruspa.life_management.test.a3
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
@@ -57,13 +57,13 @@ fun <T> AiGraph(
 			.roundToPx()
 		val itemPaddingHorizontal = itemPaddingLeft + itemPaddingRight
 		val itemPaddingVertical = itemPaddingTop + itemPaddingBottom
-		
 		val contentPaddingLeft = contentPadding.calculateLeftPadding(layoutDirection)
 			.roundToPx()
 		val contentPaddingTop = contentPadding.calculateTopPadding()
 			.roundToPx()
 		val contentPaddingRight = contentPadding.calculateRightPadding(layoutDirection)
 			.roundToPx()
+		val sameColumnLinkPaddingPx = sameColumnLinkPadding.roundToPx()
 		
 		val itemMeasurables = subcompose(GraphSlot.ITEMS) {
 			items.forEach { item -> item(item) }
@@ -73,83 +73,7 @@ fun <T> AiGraph(
 			measurable.measure(constraints.copy(minWidth = 0, minHeight = 0))
 		}
 		
-		val columns = items.groupBy { itemColumn(it) }
-			.toSortedMap()
-		val itemToPlaceableMap = items.mapIndexed { index, item -> item to placeables[index] }
-			.toMap()
-		val columnIndexToWidth = columns.mapValues { (_, items) ->
-			items.maxOfOrNull { itemToPlaceableMap[it]?.width ?: 0 } ?: 0
-		}
-		
-		// Создаем карту: элемент -> следующий элемент в колонке
-		val nextItemInColumn = mutableMapOf<T, T?>()
-		columns.values.forEach { columnItems ->
-			columnItems.sortedBy { it.hashCode() }
-				.forEachIndexed { index, item ->
-					nextItemInColumn[item] = columnItems.getOrNull(index + 1)
-				}
-		}
-		
-		// Структура для хранения порядка элементов в колонках
-		val columnOrder = mutableMapOf<Int, List<T>>()
-		
-		// Заполняем порядок элементов в колонках (без сортировки)
-		columns.forEach { (columnIndex, columnItems) ->
-			columnOrder[columnIndex] = columnItems
-		}
-		
-		val itemPositions = mutableMapOf<T, IntOffset>()
-		val parentsMap = items.associateWith { item ->
-			items.filter { parent -> linked(parent, item) }
-		}
-		
-		columns.keys.sorted().forEach { currentColumnIndex ->
-			val columnItems = columnOrder[currentColumnIndex] ?: emptyList()
-			val columnWidth = columnIndexToWidth[currentColumnIndex] ?: 0
-			
-			val itemX = columns.keys
-				.filter { it < currentColumnIndex }
-				.sumOf { (columnIndexToWidth[it] ?: 0) + itemPaddingHorizontal }+ contentPaddingLeft
-			
-			var currentY = contentPaddingTop
-			
-			columnItems.forEach { item ->
-				itemPositions[item] = IntOffset(itemX, currentY)
-				
-				val parents = parentsMap[item]?.filter { itemColumn(it) < currentColumnIndex }.orEmpty()
-				
-				parents.forEach { parent ->
-					val parentColumn = itemColumn(parent)
-					val parentColumnItems = columnOrder[parentColumn] ?: emptyList()
-					val parentIndex = parentColumnItems.indexOf(parent)
-					
-					if (parentIndex != -1) {
-						val itemsToShift = parentColumnItems.subList(parentIndex + 1, parentColumnItems.size)
-						var shiftY = currentY + (itemToPlaceableMap[item]?.height ?: 0) + itemPaddingBottom
-						
-						itemsToShift.forEach { shiftedItem ->
-							val newY = maxOf(
-								itemPositions[shiftedItem]?.y ?: 0,
-								shiftY + itemPaddingTop
-							)
-							itemPositions[shiftedItem] = IntOffset(
-								itemPositions[shiftedItem]?.x ?: 0,
-								newY
-							)
-							shiftY = newY + (itemToPlaceableMap[shiftedItem]?.height ?: 0) + itemPaddingBottom
-						}
-					}
-				}
-				
-				currentY += (itemToPlaceableMap[item]?.height ?: 0) + itemPaddingVertical
-			}
-		}
-		
-		val nodes = items.mapNotNull { item ->
-			itemToPlaceableMap[item]?.let { placeable ->
-				Node(item, placeable, itemPositions[item] ?: IntOffset.Zero)
-			}
-		}
+		val nodes: List<Node<T>> = TODO()
 		
 		val links = nodes.map { node ->
 			val linkedNodes = nodes
@@ -177,7 +101,7 @@ fun <T> AiGraph(
 							y = linkedNode.position.y + linkedNode.placeable.height / 2
 						)
 						lineCenter = IntOffset(
-							x = lineStart.x + sameColumnLinkPadding.roundToPx(),
+							x = lineStart.x + sameColumnLinkPaddingPx,
 							y = lineStart.y + (lineEnd.y - lineStart.y) / 2
 						)
 					} else {
@@ -190,7 +114,7 @@ fun <T> AiGraph(
 							y = linkedNode.position.y + linkedNode.placeable.height / 2
 						)
 						lineCenter = IntOffset(
-							x = lineStart.x - sameColumnLinkPadding.roundToPx(),
+							x = lineStart.x - sameColumnLinkPaddingPx,
 							y = lineStart.y + (lineEnd.y - lineStart.y) / 2
 						)
 					}

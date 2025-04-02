@@ -1,4 +1,4 @@
-package com.lauruspa.life_management.test
+package com.lauruspa.life_management.test.a2
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
@@ -28,13 +28,15 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.toOffset
+import kotlin.math.min
 
 @Composable
-fun <T> AiGraph(
+fun <T> AiGraph2(
 	items: List<T>,
 	itemColumn: (item: T) -> Int,
 	linked: (item1: T, item2: T) -> Boolean,
 	modifier: Modifier = Modifier,
+	mainColumn: Int = 0,
 	contentPadding: PaddingValues = PaddingValues(horizontal = 0.dp),
 	itemPadding: PaddingValues = PaddingValues(
 		horizontal = 16.dp,
@@ -73,83 +75,17 @@ fun <T> AiGraph(
 			measurable.measure(constraints.copy(minWidth = 0, minHeight = 0))
 		}
 		
-		val columns = items.groupBy { itemColumn(it) }
-			.toSortedMap()
-		val itemToPlaceableMap = items.mapIndexed { index, item -> item to placeables[index] }
-			.toMap()
-		val columnIndexToWidth = columns.mapValues { (_, items) ->
-			items.maxOfOrNull { itemToPlaceableMap[it]?.width ?: 0 } ?: 0
-		}
-		
-		// Создаем карту: элемент -> следующий элемент в колонке
-		val nextItemInColumn = mutableMapOf<T, T?>()
-		columns.values.forEach { columnItems ->
-			columnItems.sortedBy { it.hashCode() }
-				.forEachIndexed { index, item ->
-					nextItemInColumn[item] = columnItems.getOrNull(index + 1)
-				}
-		}
-		
-		// Структура для хранения порядка элементов в колонках
-		val columnOrder = mutableMapOf<Int, List<T>>()
-		
-		// Заполняем порядок элементов в колонках (без сортировки)
-		columns.forEach { (columnIndex, columnItems) ->
-			columnOrder[columnIndex] = columnItems
-		}
-		
-		val itemPositions = mutableMapOf<T, IntOffset>()
-		val parentsMap = items.associateWith { item ->
-			items.filter { parent -> linked(parent, item) }
-		}
-		
-		columns.keys.sorted().forEach { currentColumnIndex ->
-			val columnItems = columnOrder[currentColumnIndex] ?: emptyList()
-			val columnWidth = columnIndexToWidth[currentColumnIndex] ?: 0
-			
-			val itemX = columns.keys
-				.filter { it < currentColumnIndex }
-				.sumOf { (columnIndexToWidth[it] ?: 0) + itemPaddingHorizontal }+ contentPaddingLeft
-			
-			var currentY = contentPaddingTop
-			
-			columnItems.forEach { item ->
-				itemPositions[item] = IntOffset(itemX, currentY)
-				
-				val parents = parentsMap[item]?.filter { itemColumn(it) < currentColumnIndex }.orEmpty()
-				
-				parents.forEach { parent ->
-					val parentColumn = itemColumn(parent)
-					val parentColumnItems = columnOrder[parentColumn] ?: emptyList()
-					val parentIndex = parentColumnItems.indexOf(parent)
-					
-					if (parentIndex != -1) {
-						val itemsToShift = parentColumnItems.subList(parentIndex + 1, parentColumnItems.size)
-						var shiftY = currentY + (itemToPlaceableMap[item]?.height ?: 0) + itemPaddingBottom
-						
-						itemsToShift.forEach { shiftedItem ->
-							val newY = maxOf(
-								itemPositions[shiftedItem]?.y ?: 0,
-								shiftY + itemPaddingTop
-							)
-							itemPositions[shiftedItem] = IntOffset(
-								itemPositions[shiftedItem]?.x ?: 0,
-								newY
-							)
-							shiftY = newY + (itemToPlaceableMap[shiftedItem]?.height ?: 0) + itemPaddingBottom
-						}
-					}
-				}
-				
-				currentY += (itemToPlaceableMap[item]?.height ?: 0) + itemPaddingVertical
-			}
-		}
-		
-		val nodes = items.mapNotNull { item ->
-			itemToPlaceableMap[item]?.let { placeable ->
-				Node(item, placeable, itemPositions[item] ?: IntOffset.Zero)
-			}
-		}
+		val nodes = calcNodes(
+			items = items,
+			placeables = placeables,
+			itemColumn = itemColumn,
+			mainColumn = mainColumn,
+			linked = linked,
+			itemPaddingLeft = itemPaddingLeft,
+			itemPaddingTop = itemPaddingTop,
+			itemPaddingRight = itemPaddingRight,
+			itemPaddingBottom = itemPaddingBottom
+		)
 		
 		val links = nodes.map { node ->
 			val linkedNodes = nodes
@@ -263,6 +199,102 @@ fun <T> AiGraph(
 	}
 }
 
+private fun <T> calcNodes(
+	items: List<T>,
+	placeables: List<Placeable>,
+	itemColumn: (item: T) -> Int,
+	mainColumn: Int,
+	linked: (item1: T, item2: T) -> Boolean,
+	itemPaddingLeft: Int,
+	itemPaddingTop: Int,
+	itemPaddingRight: Int,
+	itemPaddingBottom: Int
+): List<Node<T>> {
+	val result = mutableListOf<Node<T>>()
+	val columns = items.groupBy { item ->
+		itemColumn(item)
+	}
+	
+	val columnIndexes = columns.keys.sortedDescending()
+	val xColumnPositions = columns
+		.mapValues { (_, items) ->
+			val maxColumnItemWidth = items.maxOfOrNull { item ->
+				val itemIndex = items.indexOf(item)
+				val placeable = placeables[itemIndex]
+				placeable.width
+			} ?: 0
+			itemPaddingLeft + maxColumnItemWidth + itemPaddingRight
+		}
+		.toSortedMap(reverseOrder())
+		.map(object : (Map.Entry<Int, Int>) -> Pair<Int, Int> {
+			var x = 0
+			override fun invoke(
+				columnIndexToWidth: Map.Entry<Int, Int>
+			): Pair<Int, Int> {
+				x -= columnIndexToWidth.value
+				return columnIndexToWidth.key to x
+			}
+		})
+		.toMap()
+		.toSortedMap()
+	
+	val yPositions = mutableMapOf<Int, Int>()
+	val maxYLimits = mutableMapOf<Int, Int>()
+	var currentRow = columns.maxOfOrNull { column -> column.value.size - 1 }
+		?.takeIf { size -> size >= 0 } ?: -1
+	
+	while (currentRow >= 0) {
+		for (columnIndex in columnIndexes) {
+			val item = columns[columnIndex]?.getOrNull(currentRow) ?: continue
+			val itemIndex = items.indexOf(item)
+			val placeable = placeables[itemIndex]
+			val rightColumnIndexes = columnIndexes.filter { otherColumnIndex -> otherColumnIndex > columnIndex }
+			val rightColumns = columns.filter { column -> rightColumnIndexes.contains(column.key) }
+			val itemHasChildren = rightColumns.any { rightColumn ->
+				val rightColumnItems = rightColumn.value
+				rightColumnItems.any { rightColumnItem -> linked(item, rightColumnItem) }
+			}
+			
+			val leftColumnIndexes = columnIndexes.filter { otherColumnIndex -> otherColumnIndex < columnIndex }
+			val leftColumns = columns.filter { column -> leftColumnIndexes.contains(column.key) }
+			
+			val itemHeight = itemPaddingBottom + placeable.height + itemPaddingTop
+			val maxYLimit = maxYLimits[columnIndex] ?: 0
+			val nodeY = yPositions[columnIndex] ?: -itemHeight
+			leftColumnIndexes.forEach { leftColumnIndex ->
+				val currentLeftColumnItemPosY = yPositions[leftColumnIndex] ?: 0
+				yPositions[leftColumnIndex] = min(currentLeftColumnItemPosY, nodeY)
+			}
+			result += Node(
+				item = item,
+				placeable = placeable,
+				position = IntOffset(
+					x = xColumnPositions[columnIndex] ?: continue,
+					y = nodeY
+				)
+			)
+			yPositions[columnIndex] = nodeY
+		}
+		currentRow--
+	}
+	
+	val minX = xColumnPositions.values.minOrNull() ?: 0
+	val maxX = xColumnPositions.values.maxOrNull() ?: minX
+	val columnsWidth = maxX - minX
+	val minY = result.minOfOrNull { node -> node.position.y } ?: 0
+	val maxY = result.maxOfOrNull { node -> node.position.y } ?: minY
+	val columnsHeight = maxY - minY
+	
+	return result.map { node ->
+		node.copy(
+			position = IntOffset(
+				x = node.position.x + 4000,
+				y = node.position.y + 4000
+			)
+		)
+	}
+}
+
 private data class Node<T>(
 	val item: T,
 	val placeable: Placeable,
@@ -329,10 +361,10 @@ private fun DrawScope.drawArrow(
 @Preview(
 	showBackground = true,
 	widthDp = 1800,
-	heightDp = 1400
+	heightDp = 1600
 )
 @Composable
-private fun AiGraphPreview() {
+private fun AiGraphPreview2() {
 	fun itemLevel(item: Int): Int {
 		return if (item == 50) {
 			0
@@ -343,7 +375,7 @@ private fun AiGraphPreview() {
 		}
 	}
 	
-	AiGraph(
+	AiGraph2(
 		items = remember {
 			(0..100).toList()
 		},
@@ -357,16 +389,15 @@ private fun AiGraphPreview() {
 			
 		},
 		linked = { item1, item2 ->
-			item1 == 5 && item2 == 6 ||
-			item1 == 1 && item2 == 2 ||
-			item1 == 1 && item2 == 7 ||
-			item1 == 6 && item2 == 7 ||
-			item1 == 2 && item2 == 3 ||
-			item1 == 3 && item2 == 4 ||
-			item1 == 4 && item2 == 50 ||
-			item1 == 50 && item2 == 55 ||
-			item1 == 55 && item2 == 51 ||
-
+			item1 == 10 && item2 == 11 ||
+					item1 == 11 && item2 == 12 ||
+					item1 == 12 && item2 == 13 ||
+					item1 == 13 && item2 == 14 ||
+					item1 == 14 && item2 == 50 ||
+					item1 == 50 && item2 == 66 ||
+					
+					item1 == 1 && item2 == 2 ||
+					
 					false
 		},
 		
@@ -390,10 +421,10 @@ private fun AiGraphPreview() {
 		) {
 			Text(
 				text = when (item) {
-					2 -> "2\n2"
-					10 -> "10\n10\n10\n10\n10\n10\n10\n10\n10"
-					41 -> "41\n41"
-					65 -> "65\n65"
+//					2 -> "2\n2"
+//					10 -> "10\n10\n10\n10\n10\n10\n10\n10\n10"
+//					41 -> "41\n41"
+//					65 -> "65\n65"
 					else -> item.toString()
 				},
 				modifier = Modifier.padding(16.dp),
