@@ -37,33 +37,18 @@ fun <T> AiGraph(
 	modifier: Modifier = Modifier,
 	mainColumn: Int = 0,
 	contentPadding: PaddingValues = PaddingValues(horizontal = 0.dp),
-	itemPadding: PaddingValues = PaddingValues(
-		horizontal = 16.dp,
-		vertical = 4.dp
-	),
+	itemPadding: PaddingValues = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
 	sameColumnLinkPadding: Dp = 16.dp,
 	sameColumnLinkSideOnTheRight: (item1: T, item2: T) -> Boolean = { _, _ -> true },
 	item: @Composable (item: T) -> Unit
 ) {
-	SubcomposeLayout(
-		modifier = modifier
-	) { constraints ->
-		val itemPaddingLeft = itemPadding.calculateLeftPadding(layoutDirection)
-			.roundToPx()
-		val itemPaddingTop = itemPadding.calculateTopPadding()
-			.roundToPx()
-		val itemPaddingRight = itemPadding.calculateRightPadding(layoutDirection)
-			.roundToPx()
-		val itemPaddingBottom = itemPadding.calculateBottomPadding()
-			.roundToPx()
-		val itemPaddingHorizontal = itemPaddingLeft + itemPaddingRight
-		val itemPaddingVertical = itemPaddingTop + itemPaddingBottom
-		val contentPaddingLeft = contentPadding.calculateLeftPadding(layoutDirection)
-			.roundToPx()
-		val contentPaddingTop = contentPadding.calculateTopPadding()
-			.roundToPx()
-		val contentPaddingRight = contentPadding.calculateRightPadding(layoutDirection)
-			.roundToPx()
+	SubcomposeLayout(modifier = modifier) { constraints ->
+		val itemPaddingLeft = itemPadding.calculateLeftPadding(layoutDirection).roundToPx()
+		val itemPaddingTop = itemPadding.calculateTopPadding().roundToPx()
+		val itemPaddingRight = itemPadding.calculateRightPadding(layoutDirection).roundToPx()
+		val itemPaddingBottom = itemPadding.calculateBottomPadding().roundToPx()
+		val contentPaddingLeft = contentPadding.calculateLeftPadding(layoutDirection).roundToPx()
+		val contentPaddingTop = contentPadding.calculateTopPadding().roundToPx()
 		val sameColumnLinkPaddingPx = sameColumnLinkPadding.roundToPx()
 		
 		val itemMeasurables = subcompose(GraphSlot.ITEMS) {
@@ -74,12 +59,35 @@ fun <T> AiGraph(
 			measurable.measure(constraints.copy(minWidth = 0, minHeight = 0))
 		}
 		
-		val nodes: List<Node<T>> = TODO()
+		val columnMap = items.zip(placeables).groupBy { itemColumn(it.first) }
+		val sortedColumns = columnMap.keys.sorted()
+		val columnWidths = sortedColumns.associateWith { column ->
+			columnMap[column]!!.maxOf { it.second.width }
+		}
+		val horizontalSpacingPx = 32.dp.roundToPx()
+		val verticalSpacingPx = (itemPadding.calculateTopPadding() + itemPadding.calculateBottomPadding()).roundToPx()
 		
-		val links = nodes.map { node ->
-			val linkedNodes = nodes
-				.filter { otherNode -> linked(node.item, otherNode.item) }
-			
+		val columnX = mutableMapOf<Int, Int>()
+		var currentX = contentPaddingLeft
+		for (column in sortedColumns) {
+			columnX[column] = currentX
+			currentX += columnWidths[column]!! + horizontalSpacingPx
+		}
+		
+		// Расчет позиций узлов
+		val nodes = calculateNodePositions(
+			items = items,
+			placeables = placeables,
+			itemColumn = itemColumn,
+			linked = linked,
+			columnX = columnX,
+			contentPaddingTop = contentPaddingTop,
+			verticalSpacingPx = verticalSpacingPx
+		)
+		
+		// Определение связей (стрелок)
+		val links = nodes.flatMap { node ->
+			val linkedNodes = nodes.filter { otherNode -> linked(node.item, otherNode.item) }
 			linkedNodes.map { linkedNode ->
 				val lineStart: IntOffset
 				val lineCenter: IntOffset
@@ -154,15 +162,10 @@ fun <T> AiGraph(
 				)
 			}
 		}
-			.flatten()
 		
+		// Отрисовка линий
 		val linesPlaceable = subcompose(GraphSlot.LINES) {
-			Canvas(
-				Modifier.size(
-					width = constraints.maxWidth.toDp(),
-					height = constraints.maxHeight.toDp()
-				)
-			) {
+			Canvas(Modifier.size(constraints.maxWidth.toDp(), constraints.maxHeight.toDp())) {
 				links.forEach { link ->
 					drawArrow(
 						start = link.start.toOffset(),
@@ -176,9 +179,9 @@ fun <T> AiGraph(
 					)
 				}
 			}
-		}.first()
-			.measure(constraints.copy(minWidth = 0, minHeight = 0))
+		}.first().measure(constraints.copy(minWidth = 0, minHeight = 0))
 		
+		// Размещение элементов и линий
 		layout(constraints.maxWidth, constraints.maxHeight) {
 			linesPlaceable.place(0, 0)
 			nodes.forEach { node ->
@@ -188,10 +191,95 @@ fun <T> AiGraph(
 	}
 }
 
+// Функция для расчета позиций узлов
+private fun <T> calculateNodePositions(
+	items: List<T>,
+	placeables: List<Placeable>,
+	itemColumn: (item: T) -> Int,
+	linked: (item1: T, item2: T) -> Boolean,
+	columnX: Map<Int, Int>,
+	contentPaddingTop: Int,
+	verticalSpacingPx: Int
+): MutableList<Node<T>> {
+	// Первоначальное размещение узлов
+	val nodes: MutableList<Node<T>> = buildList {
+		val columnMap = items.zip(placeables).groupBy { itemColumn(it.first) }
+		val sortedColumns = columnMap.keys.sorted()
+		for (column in sortedColumns) {
+			val columnItemList = columnMap[column]!!
+			var currentY = contentPaddingTop
+			for ((item, placeable) in columnItemList) {
+				val position = IntOffset(columnX[column]!!, currentY)
+				add(Node(item, placeable, position))
+				currentY += placeable.height + verticalSpacingPx
+			}
+		}
+	}.toMutableList()
+	
+	// Создаем карту потомков
+	val descendantsMap = mutableMapOf<T, List<T>>()
+	for (item in items) {
+		descendantsMap[item] = items.filter { otherItem ->
+			itemColumn(otherItem) > itemColumn(item) && linked(item, otherItem)
+		}
+	}
+	
+	// Ассоциация узлов с их элементами
+	val nodeMap = nodes.associateBy { it.item }
+	val allColumns = columnX.keys.sorted()
+	
+	// Сортируем узлы по Y для обработки сверху вниз
+	val sortedNodesByY = nodes.sortedBy { it.position.y }
+	
+	// Корректировка позиций
+	for (node in sortedNodesByY) {
+		val item = node.item
+		val descendants = descendantsMap[item] ?: continue
+		if (descendants.isEmpty()) continue // Пропускаем, если нет потомков
+		
+		// Находим самую нижнюю позицию среди потомков
+		val maxDescendantY = descendants.maxOf { descendant ->
+			val descendantNode = nodeMap[descendant]!!
+			descendantNode.position.y + descendantNode.placeable.height
+		}
+		
+		val columnA = itemColumn(item) // Колонка элемента A
+		val yA = node.position.y       // Y-координата элемента A
+		
+		// Обрабатываем все колонки от самой левой до columnA включительно
+		for (col in allColumns.filter { it <= columnA }) {
+			val columnNodes = nodes.filter { itemColumn(it.item) == col }
+				.sortedBy { it.position.y } // Узлы в колонке, отсортированные по Y
+			val index = columnNodes.indexOfFirst { it.position.y > yA } // Первый узел ниже A
+			
+			if (index != -1) { // Если такой узел найден
+				val firstBelow = columnNodes[index]
+				val firstBelowY = firstBelow.position.y
+				
+				// Если узел находится выше нижней границы потомков, сдвигаем
+				if (firstBelowY < maxDescendantY + verticalSpacingPx) {
+					val delta = maxDescendantY + verticalSpacingPx - firstBelowY
+					// Сдвигаем все узлы в колонке, начиная с index
+					for (i in index until columnNodes.size) {
+						val nodeToShift = columnNodes[i]
+						nodeToShift.position = IntOffset(
+							nodeToShift.position.x,
+							nodeToShift.position.y + delta
+						)
+					}
+				}
+			}
+		}
+	}
+	
+	return nodes
+}
+
+// Класс Node с изменяемой позицией
 private data class Node<T>(
 	val item: T,
 	val placeable: Placeable,
-	val position: IntOffset
+	var position: IntOffset
 )
 
 private enum class GraphSlot {
@@ -217,12 +305,10 @@ private fun DrawScope.drawArrow(
 ) {
 	val path = Path()
 	path.moveTo(start.x, start.y)
-	
 	path.lineTo(center.x, start.y)
-	val lastLineSegmentStart = Offset(x = center.x, end.y)
+	val lastLineSegmentStart = Offset(x = center.x, y = end.y)
 	path.lineTo(lastLineSegmentStart.x, lastLineSegmentStart.y)
 	path.lineTo(end.x, end.y)
-	
 	drawPath(
 		path = path,
 		color = color,
@@ -231,7 +317,6 @@ private fun DrawScope.drawArrow(
 			pathEffect = PathEffect.cornerPathEffect(maxCornerRadiusPx)
 		)
 	)
-	
 	val isRight = if (end.x - lastLineSegmentStart.x >= 0) 1 else -1
 	val triangleBottomX = end.x - isRight * triangleLengthPx
 	val triangleHalfWidth = triangleWidthPx / 2
@@ -239,7 +324,6 @@ private fun DrawScope.drawArrow(
 	path.moveTo(triangleBottomX, end.y - triangleHalfWidth)
 	path.lineTo(end.x, end.y)
 	path.lineTo(triangleBottomX, end.y + triangleHalfWidth)
-	
 	drawPath(
 		path = path,
 		color = color,
@@ -269,9 +353,7 @@ private fun AiGraphPreview() {
 	}
 	
 	AiGraph(
-		items = remember {
-			(0..100).toList()
-		},
+		items = remember { (0..100).toList() },
 		itemColumn = { item ->
 			if (item == 50) {
 				0
@@ -279,14 +361,18 @@ private fun AiGraphPreview() {
 				val columnIndex = itemLevel(item)
 				if (columnIndex == -1 || columnIndex == 1) 0 else columnIndex
 			}
-			
 		},
 		linked = { item1, item2 ->
 			item1 == 8 && item2 == 9 ||
-			item1 == 8 && item2 == 9 ||
-			item1 == 9 && item2 == 49 ||
-			item1 == 49 && item2 == 50 ||
-			item1 == 50 && item2 == 51 ||
+			item1 == 7 && item2 == 8 ||
+			item1 == 7 && item2 == 13 ||
+			item1 == 7 && item2 == 18 ||
+					item1 == 8 && item2 == 9 ||
+					item1 == 9 && item2 == 49 ||
+					item1 == 49 && item2 == 50 ||
+					item1 == 50 && item2 == 56 ||
+					item1 == 56 && item2 == 57 ||
+					item1 == 56 && item2 == 62 ||
 					false
 		},
 		
@@ -300,13 +386,8 @@ private fun AiGraphPreview() {
 	) { item ->
 		Card(
 			modifier = Modifier.width(100.dp),
-			colors = CardDefaults.cardColors(
-				containerColor = Color.White
-			),
-			border = BorderStroke(
-				width = 1.dp,
-				color = Color.Gray
-			)
+			colors = CardDefaults.cardColors(containerColor = Color.White),
+			border = BorderStroke(width = 1.dp, color = Color.Gray)
 		) {
 			Text(
 				text = when (item) {
