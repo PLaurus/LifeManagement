@@ -191,7 +191,6 @@ fun <T> AiGraph(
 	}
 }
 
-// Функция для расчета позиций узлов
 private fun <T> calculateNodePositions(
 	items: List<T>,
 	placeables: List<Placeable>,
@@ -201,65 +200,69 @@ private fun <T> calculateNodePositions(
 	contentPaddingTop: Int,
 	verticalSpacingPx: Int
 ): MutableList<Node<T>> {
-	// Первоначальное размещение узлов
-	val nodes: MutableList<Node<T>> = buildList {
-		val columnMap = items.zip(placeables).groupBy { itemColumn(it.first) }
-		val sortedColumns = columnMap.keys.sorted()
-		for (column in sortedColumns) {
-			val columnItemList = columnMap[column]!!
-			var currentY = contentPaddingTop
-			for ((item, placeable) in columnItemList) {
-				val position = IntOffset(columnX[column]!!, currentY)
-				add(Node(item, placeable, position))
-				currentY += placeable.height + verticalSpacingPx
-			}
-		}
-	}.toMutableList()
+	val nodes: MutableList<Node<T>> = mutableListOf()
+	val columnMap = items.zip(placeables).groupBy { itemColumn(it.first) }
+	val sortedColumns = columnMap.keys.sorted()
+	val nodeMap = mutableMapOf<T, Node<T>>()
 	
-	// Создаем карту потомков
+	// Размещение узлов по колонкам
+	for (column in sortedColumns) {
+		val columnItems = columnMap[column]!!
+		val sortedItems = columnItems.sortedBy { items.indexOf(it.first) }
+		var currentY = contentPaddingTop
+		
+		for ((item, placeable) in sortedItems) {
+			// Находим родителей в левых колонках
+			val parents = items.filter { parent ->
+				itemColumn(parent) < column && linked(parent, item)
+			}
+			val parentNodes = parents.mapNotNull { nodeMap[it] }
+			
+			// Определяем минимальную Y-координату родителей
+			val minParentY = if (parentNodes.isNotEmpty()) {
+				parentNodes.minOf { it.position.y }
+			} else {
+				contentPaddingTop
+			}
+			
+			// Размещаем узел не выше минимальной Y-координаты родителей
+			currentY = maxOf(currentY, minParentY)
+			val position = IntOffset(columnX[column]!!, currentY)
+			val node = Node(item, placeable, position)
+			nodes.add(node)
+			nodeMap[item] = node
+			currentY += placeable.height + verticalSpacingPx
+		}
+	}
+	
+	// Корректировка позиций для поддеревьев
 	val descendantsMap = mutableMapOf<T, List<T>>()
 	for (item in items) {
 		descendantsMap[item] = items.filter { otherItem ->
 			itemColumn(otherItem) > itemColumn(item) && linked(item, otherItem)
 		}
 	}
-	
-	// Ассоциация узлов с их элементами
-	val nodeMap = nodes.associateBy { it.item }
 	val allColumns = columnX.keys.sorted()
-	
-	// Сортируем узлы по Y для обработки сверху вниз
 	val sortedNodesByY = nodes.sortedBy { it.position.y }
-	
-	// Корректировка позиций
 	for (node in sortedNodesByY) {
 		val item = node.item
 		val descendants = descendantsMap[item] ?: continue
-		if (descendants.isEmpty()) continue // Пропускаем, если нет потомков
-		
-		// Находим самую нижнюю позицию среди потомков
+		if (descendants.isEmpty()) continue
 		val maxDescendantY = descendants.maxOf { descendant ->
 			val descendantNode = nodeMap[descendant]!!
 			descendantNode.position.y + descendantNode.placeable.height
 		}
-		
-		val columnA = itemColumn(item) // Колонка элемента A
-		val yA = node.position.y       // Y-координата элемента A
-		
-		// Обрабатываем все колонки от самой левой до columnA включительно
+		val columnA = itemColumn(item)
+		val yA = node.position.y
 		for (col in allColumns.filter { it <= columnA }) {
 			val columnNodes = nodes.filter { itemColumn(it.item) == col }
-				.sortedBy { it.position.y } // Узлы в колонке, отсортированные по Y
-			val index = columnNodes.indexOfFirst { it.position.y > yA } // Первый узел ниже A
-			
-			if (index != -1) { // Если такой узел найден
+				.sortedBy { it.position.y }
+			val index = columnNodes.indexOfFirst { it.position.y > yA }
+			if (index != -1) {
 				val firstBelow = columnNodes[index]
 				val firstBelowY = firstBelow.position.y
-				
-				// Если узел находится выше нижней границы потомков, сдвигаем
 				if (firstBelowY < maxDescendantY + verticalSpacingPx) {
 					val delta = maxDescendantY + verticalSpacingPx - firstBelowY
-					// Сдвигаем все узлы в колонке, начиная с index
 					for (i in index until columnNodes.size) {
 						val nodeToShift = columnNodes[i]
 						nodeToShift.position = IntOffset(
@@ -271,7 +274,6 @@ private fun <T> calculateNodePositions(
 			}
 		}
 	}
-	
 	return nodes
 }
 
@@ -363,6 +365,7 @@ private fun AiGraphPreview() {
 			}
 		},
 		linked = { item1, item2 ->
+			item1 == 2 && item2 == 23 ||
 			item1 == 8 && item2 == 9 ||
 			item1 == 7 && item2 == 8 ||
 			item1 == 7 && item2 == 13 ||
@@ -373,6 +376,7 @@ private fun AiGraphPreview() {
 					item1 == 50 && item2 == 56 ||
 					item1 == 56 && item2 == 57 ||
 					item1 == 56 && item2 == 62 ||
+					item1 == 23 && item2 == 19 ||
 					false
 		},
 		
