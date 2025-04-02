@@ -311,16 +311,11 @@ private fun AiGraphPreview() {
 			
 		},
 		linked = { item1, item2 ->
-			item1 == 5 && item2 == 6 ||
-			item1 == 1 && item2 == 2 ||
-			item1 == 1 && item2 == 7 ||
-			item1 == 6 && item2 == 7 ||
-			item1 == 2 && item2 == 3 ||
-			item1 == 3 && item2 == 4 ||
-			item1 == 4 && item2 == 50 ||
-			item1 == 50 && item2 == 55 ||
-			item1 == 55 && item2 == 51 ||
-
+			item1 == 8 && item2 == 9 ||
+			item1 == 8 && item2 == 9 ||
+			item1 == 9 && item2 == 49 ||
+			item1 == 49 && item2 == 50 ||
+			item1 == 50 && item2 == 51 ||
 					false
 		},
 		
