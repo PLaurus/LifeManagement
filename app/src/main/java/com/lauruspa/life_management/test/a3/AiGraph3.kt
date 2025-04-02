@@ -33,9 +33,9 @@ import androidx.compose.ui.unit.toOffset
 fun <T> AiGraph(
 	items: List<T>,
 	itemColumn: (item: T) -> Int,
-	mainColumn: Int = 0,
 	linked: (item1: T, item2: T) -> Boolean,
 	modifier: Modifier = Modifier,
+	mainColumn: Int = 0,
 	contentPadding: PaddingValues = PaddingValues(horizontal = 0.dp),
 	itemPadding: PaddingValues = PaddingValues(
 		horizontal = 16.dp,
