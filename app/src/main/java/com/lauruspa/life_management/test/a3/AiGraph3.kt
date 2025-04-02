@@ -74,7 +74,36 @@ fun <T> AiGraph(
 			measurable.measure(constraints.copy(minWidth = 0, minHeight = 0))
 		}
 		
-		val nodes: List<Node<T>> = TODO()
+		val nodes: List<Node<T>> = run {
+			val columns = items.groupBy { itemColumn(it) }
+			val sortedColumns = columns.keys.sorted() // Сортируем колонки по возрастанию
+			
+			val columnX = mutableMapOf<Int, Int>()
+			var currentX = contentPaddingLeft
+			
+			// Рассчитываем X-позиции для всех колонок последовательно
+			sortedColumns.forEach { column ->
+				val maxItemWidth = columns[column]?.maxOf { item ->
+					placeables[items.indexOf(item)].width
+				} ?: 0
+				
+				columnX[column] = currentX
+				currentX += maxItemWidth + itemPaddingHorizontal
+			}
+			
+			// Рассчитываем Y для элементов внутри колонок
+			columns.entries.flatMap { (col, colItems) ->
+				var currentY = contentPaddingTop
+				colItems.map { item ->
+					val index = items.indexOf(item)
+					val placeable = placeables[index]
+					val x = columnX[col] ?: 0
+					val y = currentY
+					currentY += placeable.height + itemPaddingVertical
+					Node(item, placeable, IntOffset(x, y))
+				}
+			}
+		}
 		
 		val links = nodes.map { node ->
 			val linkedNodes = nodes
