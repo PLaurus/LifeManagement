@@ -44,6 +44,7 @@ fun <T> AiGraph2(
 	),
 	sameColumnLinkPadding: Dp = 16.dp,
 	sameColumnLinkSideOnTheRight: (item1: T, item2: T) -> Boolean = { _, _ -> true },
+	debug: Boolean = false,
 	item: @Composable (item: T) -> Unit
 ) {
 	SubcomposeLayout(
@@ -190,23 +191,26 @@ fun <T> AiGraph2(
 		}.first()
 			.measure(constraints.copy(minWidth = 0, minHeight = 0))
 		
-		val debugPlaceable = subcompose(GraphSlot.DEBUG) {
-			Column {
-				nodes.forEach { node ->
-					Text(
-						text = "Value: ${node.item}; Position: ${node.position}"
-					)
+		val debugPlaceable = if (debug) {
+			subcompose(GraphSlot.DEBUG) {
+				Column {
+					Text(text = "Nodes count: ${nodes.size}")
+					nodes.forEach { node ->
+						Text(
+							text = "Value: ${node.item}; Position: ${node.position}"
+						)
+					}
 				}
-			}
-		}.first()
-			.measure(constraints.copy(minWidth = 0, minHeight = 0))
+			}.first()
+				.measure(constraints.copy(minWidth = 0, minHeight = 0))
+		} else null
 		
 		layout(constraints.maxWidth, constraints.maxHeight) {
 			linesPlaceable.place(0, 0)
 			nodes.forEach { node ->
 				node.placeable.place(node.position.x, node.position.y)
 			}
-			debugPlaceable.place(0, 0)
+			debugPlaceable?.place(0, 0)
 		}
 	}
 }
@@ -269,7 +273,7 @@ private fun <T> findRoots(
 			columnKey < itemColumnKey
 		}
 		.mapValues { (_, otherItems) ->
-			otherItems.filter { otherItem -> linked(item, otherItem) }
+			otherItems.filter { otherItem -> linked(otherItem, item) }
 		}
 		.toSortedMap()
 		.flatMap { (_, parents) -> parents }
@@ -325,6 +329,7 @@ private fun <T> calcNodesByRoots(
 		roots = roots,
 		itemColumnKeyProvider = itemColumnKeyProvider,
 		linked = linked,
+		itemPaddingLeft = itemPaddingLeft,
 		itemPaddingTop = itemPaddingTop,
 		itemPaddingBottom = itemPaddingBottom,
 		columns = columns,
@@ -343,6 +348,7 @@ private fun <T> calcNodesByRoots(
 	roots: List<T>,
 	itemColumnKeyProvider: (item: T) -> Int,
 	linked: (item1: T, item2: T) -> Boolean,
+	itemPaddingLeft: Int,
 	itemPaddingTop: Int,
 	itemPaddingBottom: Int,
 	columns: Map<Int, List<Pair<T, Placeable>>>,
@@ -353,7 +359,7 @@ private fun <T> calcNodesByRoots(
 	val result = mutableListOf<Node<T>>()
 	for (root in roots) {
 		// Если item уже размещен, пропускаем его
-		itemToNodeMap[root] ?: continue
+		if (itemToNodeMap[root] != null) continue
 		
 		val parentColumnKey = itemColumnKeyProvider(root)
 		
@@ -361,13 +367,14 @@ private fun <T> calcNodesByRoots(
 			?.firstOrNull { columnItem -> columnItem.first == root }
 			?.second ?: continue
 		
-		val nodeY = (yPositions[parentColumnKey] ?: 0) + itemPaddingTop + placeable.height + itemPaddingBottom
+		val nodeY = (yPositions[parentColumnKey] ?: 0) + itemPaddingTop
+		val nextItemPosition = nodeY + placeable.height + itemPaddingBottom
 		
 		val node = Node(
 			item = root,
 			placeable = placeable,
 			position = IntOffset(
-				x = columnXPositions[parentColumnKey] ?: continue,
+				x = (columnXPositions[parentColumnKey] ?: continue) + itemPaddingLeft,
 				y = nodeY
 			)
 		)
@@ -375,12 +382,21 @@ private fun <T> calcNodesByRoots(
 		itemToNodeMap[root] = node
 		result += node
 		
+		// Следующие элементы в предыдущих колонках должны быть ниже этой ноды
 		columns.keys
 			.filter { columnKey -> columnKey <= parentColumnKey }
 			.forEach { columnKey ->
 				val currentYPosition = yPositions[columnKey] ?: 0
-				yPositions[columnKey] = maxOf(currentYPosition, nodeY)
+				yPositions[columnKey] = maxOf(currentYPosition, nextItemPosition)
 			}
+		
+		// Если в следующих колонках есть дети, то следующие элементы в этих колонках должны быть ниже этой ноды
+//		columns.keys
+//			.filter { columnKey -> columnKey = parentColumnKey }
+//			.forEach { columnKey ->
+//				val currentYPosition = yPositions[columnKey] ?: 0
+//				yPositions[columnKey] = maxOf(currentYPosition, nodeY)
+//			}
 		
 		// Ищем детей начиная от последней колонки до колонки родителя (не включая колонки родителя)
 		val childItemToPlaceableList = columns
@@ -404,6 +420,7 @@ private fun <T> calcNodesByRoots(
 				roots = childItemToPlaceableList,
 				itemColumnKeyProvider = itemColumnKeyProvider,
 				linked = linked,
+				itemPaddingLeft = itemPaddingLeft,
 				itemPaddingTop = itemPaddingTop,
 				itemPaddingBottom = itemPaddingBottom,
 				columns = columns,
@@ -416,11 +433,6 @@ private fun <T> calcNodesByRoots(
 	
 	return result
 }
-
-private data class Branch<T>(
-	val item: T,
-	val children: List<Branch<T>>
-)
 
 private data class Node<T>(
 	val item: T,
@@ -517,14 +529,23 @@ private fun AiGraphPreview2() {
 			
 		},
 		linked = { item1, item2 ->
-			item1 == 10 && item2 == 11 ||
-					item1 == 11 && item2 == 12 ||
-					item1 == 12 && item2 == 13 ||
-					item1 == 13 && item2 == 14 ||
-					item1 == 14 && item2 == 50 ||
-					item1 == 50 && item2 == 66 ||
-					
+			item1 == 0 && item2 == 1 ||
+//			item1 == 0 && item2 == 6 ||
 					item1 == 1 && item2 == 2 ||
+//					item1 == 6 && item2 == 2 ||
+					item1 == 2 && item2 == 3 ||
+//					item1 == 2 && item2 == 13 ||
+//					item1 == 2 && item2 == 18 ||
+					item1 == 3 && item2 == 4 ||
+					item1 == 10 && item2 == 11 ||
+					item1 == 11 && item2 == 12 ||
+					item1 == 12 && item2 == 23 ||
+					item1 == 13 && item2 == 14 ||
+					item1 == 23 && item2 == 9 ||
+					item1 == 14 && item2 == 49 ||
+					item1 == 49 && item2 == 50 ||
+					
+					item1 == 50 && item2 == 66 ||
 					
 					false
 		},
