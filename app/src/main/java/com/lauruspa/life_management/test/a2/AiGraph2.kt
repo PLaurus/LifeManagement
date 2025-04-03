@@ -367,7 +367,8 @@ private fun <T> calcNodesByRoots(
 			?.firstOrNull { columnItem -> columnItem.first == root }
 			?.second ?: continue
 		
-		val nodeY = (yPositions[parentColumnKey] ?: 0) + itemPaddingTop
+		val itemY = yPositions[parentColumnKey] ?: 0
+		val nodeY = itemY + itemPaddingTop
 		val nextItemPosition = nodeY + placeable.height + itemPaddingBottom
 		
 		val node = Node(
@@ -390,13 +391,13 @@ private fun <T> calcNodesByRoots(
 				yPositions[columnKey] = maxOf(currentYPosition, nextItemPosition)
 			}
 		
-		// Если в следующих колонках есть дети, то следующие элементы в этих колонках должны быть ниже этой ноды
-//		columns.keys
-//			.filter { columnKey -> columnKey = parentColumnKey }
-//			.forEach { columnKey ->
-//				val currentYPosition = yPositions[columnKey] ?: 0
-//				yPositions[columnKey] = maxOf(currentYPosition, nodeY)
-//			}
+		// Если в следующих колонках есть дети, то следующие элементы в этих колонках должны быть не выше этой ноды
+		columns.keys
+			.filter { columnKey -> columnKey > parentColumnKey }
+			.forEach { columnKey ->
+				val currentYPosition = yPositions[columnKey] ?: 0
+				yPositions[columnKey] = maxOf(currentYPosition, itemY)
+			}
 		
 		// Ищем детей начиная от последней колонки до колонки родителя (не включая колонки родителя)
 		val childItemToPlaceableList = columns
@@ -534,7 +535,7 @@ private fun AiGraphPreview2() {
 					item1 == 1 && item2 == 2 ||
 //					item1 == 6 && item2 == 2 ||
 					item1 == 2 && item2 == 3 ||
-//					item1 == 2 && item2 == 13 ||
+					item1 == 2 && item2 == 13 ||
 //					item1 == 2 && item2 == 18 ||
 					item1 == 3 && item2 == 4 ||
 					item1 == 10 && item2 == 11 ||
