@@ -3,6 +3,7 @@ package com.lauruspa.life_management.test.a2
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -77,7 +78,7 @@ fun <T> AiGraph2(
 		val nodes = calcNodes(
 			items = items,
 			placeables = placeables,
-			itemColumnKey = itemColumnKey,
+			itemColumnKeyProvider = itemColumnKey,
 			mainColumnKey = mainColumnKey,
 			linked = linked,
 			itemPaddingLeft = itemPaddingLeft,
@@ -189,11 +190,23 @@ fun <T> AiGraph2(
 		}.first()
 			.measure(constraints.copy(minWidth = 0, minHeight = 0))
 		
+		val debugPlaceable = subcompose(GraphSlot.DEBUG) {
+			Column {
+				nodes.forEach { node ->
+					Text(
+						text = "Value: ${node.item}; Position: ${node.position}"
+					)
+				}
+			}
+		}.first()
+			.measure(constraints.copy(minWidth = 0, minHeight = 0))
+		
 		layout(constraints.maxWidth, constraints.maxHeight) {
 			linesPlaceable.place(0, 0)
 			nodes.forEach { node ->
 				node.placeable.place(node.position.x, node.position.y)
 			}
+			debugPlaceable.place(0, 0)
 		}
 	}
 }
@@ -201,7 +214,7 @@ fun <T> AiGraph2(
 private fun <T> calcNodes(
 	items: List<T>,
 	placeables: List<Placeable>,
-	itemColumnKey: (item: T) -> Int,
+	itemColumnKeyProvider: (item: T) -> Int,
 	mainColumnKey: Int,
 	linked: (item1: T, item2: T) -> Boolean,
 	itemPaddingLeft: Int,
@@ -209,9 +222,8 @@ private fun <T> calcNodes(
 	itemPaddingRight: Int,
 	itemPaddingBottom: Int
 ): List<Node<T>> {
-	val result = mutableListOf<Node<T>>()
 	val columns = items.zip(placeables)
-		.groupBy { itemColumnKey(it.first) }
+		.groupBy { itemColumnKeyProvider(it.first) }
 		.toSortedMap()
 	
 	val mainColumn = columns[mainColumnKey] ?: columns.entries.first().value
@@ -220,20 +232,29 @@ private fun <T> calcNodes(
 		itemAndPlaceableList.map { itemAndPlaceable -> itemAndPlaceable.first }
 	}
 	
-	for ((item, _) in mainColumn) {
-		val roots = findRoots(
-			item = item,
-			itemColumnKeyProvider = itemColumnKey,
-			columns = columnsOfItems,
-			linked = linked
-		)
-		
-		
-	}
+	val roots = mainColumn
+		.map { (mainColumnItem, _) ->
+			findRoots(
+				item = mainColumnItem,
+				itemColumnKeyProvider = itemColumnKeyProvider,
+				columns = columnsOfItems,
+				linked = linked
+			)
+		}
+		.flatten()
+		.toSet()
+		.toList()
 	
-	// TODO
-	
-	return result
+	return calcNodesByRoots(
+		roots = roots,
+		itemColumnKeyProvider = itemColumnKeyProvider,
+		linked = linked,
+		columns = columns,
+		itemPaddingLeft = itemPaddingLeft,
+		itemPaddingTop = itemPaddingTop,
+		itemPaddingRight = itemPaddingRight,
+		itemPaddingBottom = itemPaddingBottom
+	)
 }
 
 private fun <T> findRoots(
@@ -253,7 +274,7 @@ private fun <T> findRoots(
 		.toSortedMap()
 		.flatMap { (_, parents) -> parents }
 	
-	return if(parents.isEmpty()) {
+	return if (parents.isEmpty()) {
 		listOf(item)
 	} else {
 		parents.flatMap { parent ->
@@ -265,6 +286,135 @@ private fun <T> findRoots(
 			)
 		}
 	}
+}
+
+private fun <T> calcNodesByRoots(
+	roots: List<T>,
+	itemColumnKeyProvider: (item: T) -> Int,
+	linked: (item1: T, item2: T) -> Boolean,
+	columns: Map<Int, List<Pair<T, Placeable>>>,
+	itemPaddingLeft: Int,
+	itemPaddingTop: Int,
+	itemPaddingRight: Int,
+	itemPaddingBottom: Int
+): List<Node<T>> {
+	val columnWidths = columns.mapValues { (_, itemToPlaceableList) ->
+		val maxItemWidth = itemToPlaceableList.maxOfOrNull { (_, placeable) -> placeable.width }
+		
+		if (maxItemWidth != null) {
+			itemPaddingLeft + maxItemWidth + itemPaddingRight
+		} else {
+			0
+		}
+	}
+	
+	val columnXPositions = columnWidths.toSortedMap()
+		.mapValues(object : (Map.Entry<Int, Int>) -> Int {
+			var x = 0
+			override fun invoke(columnKeyToWidth: Map.Entry<Int, Int>): Int {
+				val columnWidth = x
+				x += columnKeyToWidth.value
+				return columnWidth
+			}
+		})
+	
+	val yPositions = mutableMapOf<Int, Int>()
+	val itemToNodeMap: MutableMap<T, Node<T>> = mutableMapOf()
+	
+	return calcNodesByRoots(
+		roots = roots,
+		itemColumnKeyProvider = itemColumnKeyProvider,
+		linked = linked,
+		itemPaddingTop = itemPaddingTop,
+		itemPaddingBottom = itemPaddingBottom,
+		columns = columns,
+		columnXPositions = columnXPositions,
+		yPositions = yPositions,
+		itemToNodeMap = itemToNodeMap
+	)
+}
+
+/**
+ * @param yPositions Хранит следующий y на котором может быть размещен следующий item в колонке.
+ * Ключ это номер колонки. Значение это минимально допкстимая позиция следующего элемента в колонке.
+ * @param itemToNodeMap Хранит уже созданные ноды для item.
+ */
+private fun <T> calcNodesByRoots(
+	roots: List<T>,
+	itemColumnKeyProvider: (item: T) -> Int,
+	linked: (item1: T, item2: T) -> Boolean,
+	itemPaddingTop: Int,
+	itemPaddingBottom: Int,
+	columns: Map<Int, List<Pair<T, Placeable>>>,
+	columnXPositions: Map<Int, Int>,
+	yPositions: MutableMap<Int, Int>,
+	itemToNodeMap: MutableMap<T, Node<T>>,
+): List<Node<T>> {
+	val result = mutableListOf<Node<T>>()
+	for (root in roots) {
+		// Если item уже размещен, пропускаем его
+		itemToNodeMap[root] ?: continue
+		
+		val parentColumnKey = itemColumnKeyProvider(root)
+		
+		val placeable = columns[parentColumnKey]
+			?.firstOrNull { columnItem -> columnItem.first == root }
+			?.second ?: continue
+		
+		val nodeY = (yPositions[parentColumnKey] ?: 0) + itemPaddingTop + placeable.height + itemPaddingBottom
+		
+		val node = Node(
+			item = root,
+			placeable = placeable,
+			position = IntOffset(
+				x = columnXPositions[parentColumnKey] ?: continue,
+				y = nodeY
+			)
+		)
+		
+		itemToNodeMap[root] = node
+		result += node
+		
+		columns.keys
+			.filter { columnKey -> columnKey <= parentColumnKey }
+			.forEach { columnKey ->
+				val currentYPosition = yPositions[columnKey] ?: 0
+				yPositions[columnKey] = maxOf(currentYPosition, nodeY)
+			}
+		
+		// Ищем детей начиная от последней колонки до колонки родителя (не включая колонки родителя)
+		val childItemToPlaceableList = columns
+			.filterKeys { otherColumnKey -> otherColumnKey > parentColumnKey }
+			.mapValues { (_, otherItemToPlaceableList) ->
+				otherItemToPlaceableList.filter { (otherItem, _) ->
+					linked(root, otherItem)
+				}
+			}
+//			.filterValues { otherItemToPlaceableList -> otherItemToPlaceableList.isNotEmpty() }
+			.toSortedMap(reverseOrder())
+			.values
+			.flatten()
+			.toMap()
+			.keys
+			.toList()
+		
+		// Если дети есть, повоторяем алгоритм для них
+		if (childItemToPlaceableList.isNotEmpty()) {
+			result += calcNodesByRoots(
+				roots = childItemToPlaceableList,
+				itemColumnKeyProvider = itemColumnKeyProvider,
+				linked = linked,
+				itemPaddingTop = itemPaddingTop,
+				itemPaddingBottom = itemPaddingBottom,
+				columns = columns,
+				columnXPositions = columnXPositions,
+				yPositions = yPositions,
+				itemToNodeMap = itemToNodeMap
+			)
+		}
+	}
+	
+	return result
 }
 
 private data class Branch<T>(
@@ -280,7 +430,8 @@ private data class Node<T>(
 
 private enum class GraphSlot {
 	ITEMS,
-	LINES
+	LINES,
+	DEBUG
 }
 
 private data class Link(
