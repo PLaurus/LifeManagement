@@ -530,23 +530,50 @@ private fun AiGraphPreview2() {
 			
 		},
 		linked = { item1, item2 ->
-			item1 == 0 && item2 == 1 ||
-//			item1 == 0 && item2 == 6 ||
-					item1 == 1 && item2 == 2 ||
-//					item1 == 6 && item2 == 2 ||
-					item1 == 2 && item2 == 3 ||
-					item1 == 2 && item2 == 13 ||
-//					item1 == 2 && item2 == 18 ||
-					item1 == 3 && item2 == 4 ||
-					item1 == 10 && item2 == 11 ||
-					item1 == 11 && item2 == 12 ||
-					item1 == 12 && item2 == 23 ||
-					item1 == 13 && item2 == 14 ||
-					item1 == 23 && item2 == 9 ||
-					item1 == 14 && item2 == 49 ||
-					item1 == 49 && item2 == 50 ||
+			// -3
+			item1 == 11 && item2 == 27 ||
+					item1 == 11 && item2 == 32 ||
+					item1 == 11 && item2 == 37 ||
+					item1 == 11 && item2 == 42 ||
 					
-					item1 == 50 && item2 == 66 ||
+					// -2
+					item1 == 12 && item2 == 13 ||
+					item1 == 17 && item2 == 13 ||
+					item1 == 22 && item2 == 24 ||
+					item1 == 27 && item2 == 28 ||
+					item1 == 27 && item2 == 33 ||
+					item1 == 27 && item2 == 38 ||
+					item1 == 47 && item2 == 44 ||
+					
+					// -1
+					item1 == 3 && item2 == 4 ||
+					item1 == 8 && item2 == 4 ||
+					item1 == 13 && item2 == 14 ||
+					item1 == 18 && item2 == 19 ||
+					item1 == 28 && item2 == 29 ||
+					
+					// 0
+					item1 == 19 && item2 == 50 ||
+					item1 == 50 && item2 == 55 ||
+					item1 == 55 && item2 == 61 ||
+					item1 == 55 && item2 == 71 ||
+					item1 == 55 && item2 == 81 ||
+					item1 == 65 && item2 == 81 ||
+					item1 == 75 && item2 == 56 ||
+					item1 == 75 && item2 == 66 ||
+					item1 == 75 && item2 == 76 ||
+					
+					// 1
+					item1 == 61 && item2 == 57 ||
+					item1 == 71 && item2 == 67 ||
+					item1 == 71 && item2 == 77 ||
+					item1 == 71 && item2 == 82 ||
+					item1 == 81 && item2 == 52 ||
+					
+					// 2
+					item1 == 56 && item2 == 58 ||
+					item1 == 56 && item2 == 68 ||
+					item1 == 66 && item2 == 52 ||
 					
 					false
 		},
@@ -571,10 +598,9 @@ private fun AiGraphPreview2() {
 		) {
 			Text(
 				text = when (item) {
-//					2 -> "2\n2"
-//					10 -> "10\n10\n10\n10\n10\n10\n10\n10\n10"
-//					41 -> "41\n41"
-//					65 -> "65\n65"
+					13 -> "13\n13"
+				    34 -> "34\n".repeat(4)
+				    37 -> "37\n".repeat(4)
 					else -> item.toString()
 				},
 				modifier = Modifier.padding(16.dp),

@@ -397,10 +397,10 @@ private fun AiGraphPreview() {
 		) {
 			Text(
 				text = when (item) {
-					2 -> "2\n2"
-					10 -> "10\n10\n10\n10\n10\n10\n10\n10\n10"
-					41 -> "41\n41"
-					65 -> "65\n65"
+//					2 -> "2\n2"
+//					10 -> "10\n10\n10\n10\n10\n10\n10\n10\n10"
+//					41 -> "41\n41"
+//					65 -> "65\n65"
 					else -> item.toString()
 				},
 				modifier = Modifier.padding(16.dp),
