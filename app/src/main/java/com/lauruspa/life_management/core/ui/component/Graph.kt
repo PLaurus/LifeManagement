@@ -1,20 +1,25 @@
-package com.lauruspa.life_management.test.a2
+package com.lauruspa.life_management.core.ui.component
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.scrollable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -25,13 +30,15 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.Placeable
 import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.toOffset
 
 @Composable
-fun <T> AiGraph2(
+fun <T> Graph(
 	items: List<T>,
 	itemColumnKey: (item: T) -> Int,
 	linked: (item1: T, item2: T) -> Boolean,
@@ -48,7 +55,7 @@ fun <T> AiGraph2(
 	item: @Composable (item: T) -> Unit
 ) {
 	SubcomposeLayout(
-		modifier = modifier
+		modifier = modifier.clipToBounds()
 	) { constraints ->
 		val itemPaddingLeft = itemPadding.calculateLeftPadding(layoutDirection)
 			.roundToPx()
@@ -169,12 +176,7 @@ fun <T> AiGraph2(
 			.flatten()
 		
 		val linesPlaceable = subcompose(GraphSlot.LINES) {
-			Canvas(
-				Modifier.size(
-					width = constraints.maxWidth.toDp(),
-					height = constraints.maxHeight.toDp()
-				)
-			) {
+			Canvas(Modifier.fillMaxSize()) {
 				links.forEach { link ->
 					drawArrow(
 						start = link.start.toOffset(),
@@ -205,7 +207,15 @@ fun <T> AiGraph2(
 				.measure(constraints.copy(minWidth = 0, minHeight = 0))
 		} else null
 		
-		layout(constraints.maxWidth, constraints.maxHeight) {
+		val graphSize = calcComponentSize(
+			constraints = constraints,
+			nodes = nodes,
+			links = links,
+			itemPaddingHorizontal = itemPaddingHorizontal,
+			itemPaddingVertical = itemPaddingVertical
+		)
+		
+		layout(graphSize.width, graphSize.height) {
 			linesPlaceable.place(0, 0)
 			nodes.forEach { node ->
 				node.placeable.place(node.position.x, node.position.y)
@@ -435,6 +445,36 @@ private fun <T> calcNodesByRoots(
 	return result
 }
 
+private fun <T> calcComponentSize(
+	constraints: Constraints,
+	nodes: List<Node<T>>,
+	links: List<Link>,
+	itemPaddingHorizontal: Int,
+	itemPaddingVertical: Int
+): IntSize {
+	
+	val nodesWidth: Int
+	val nodesHeight: Int
+	if (nodes.isNotEmpty()) {
+		val nodeMinX = nodes.minOf { node -> node.position.x }
+		val nodeMaxX = nodes.maxOf { node -> node.position.x + node.placeable.width }
+		val nodeMinY = nodes.minOf { node -> node.position.y }
+		val nodeMaxY = nodes.maxOf { node -> node.position.y + node.placeable.height }
+		nodesWidth = nodeMaxX - nodeMinX + itemPaddingHorizontal
+		nodesHeight = nodeMaxY - nodeMinY + itemPaddingVertical
+	} else {
+		nodesWidth = 0
+		nodesHeight = 0
+	}
+	
+	// TODO: handle links
+	
+	return IntSize(
+		width = nodesWidth.coerceAtLeast(constraints.minWidth),
+		height = nodesHeight.coerceAtLeast(constraints.minHeight)
+	)
+}
+
 private data class Node<T>(
 	val item: T,
 	val placeable: Placeable,
@@ -504,8 +544,9 @@ private fun DrawScope.drawArrow(
 	widthDp = 1800,
 	heightDp = 1600
 )
+@Preview(showBackground = true)
 @Composable
-private fun AiGraphPreview2() {
+private fun GraphPreview() {
 	fun itemLevel(item: Int): Int {
 		return if (item == 50) {
 			0
@@ -516,7 +557,7 @@ private fun AiGraphPreview2() {
 		}
 	}
 	
-	AiGraph2(
+	Graph(
 		items = remember {
 			(0..100).toList()
 		},
