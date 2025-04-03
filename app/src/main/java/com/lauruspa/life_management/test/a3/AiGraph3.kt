@@ -365,18 +365,20 @@ private fun AiGraphPreview() {
 			}
 		},
 		linked = { item1, item2 ->
-			item1 == 2 && item2 == 23 ||
-			item1 == 8 && item2 == 9 ||
-			item1 == 7 && item2 == 8 ||
-			item1 == 7 && item2 == 13 ||
-			item1 == 7 && item2 == 18 ||
-					item1 == 8 && item2 == 9 ||
-					item1 == 9 && item2 == 49 ||
-					item1 == 49 && item2 == 50 ||
-					item1 == 50 && item2 == 56 ||
-					item1 == 56 && item2 == 57 ||
-					item1 == 56 && item2 == 62 ||
-					item1 == 23 && item2 == 19 ||
+			item1 == 0 && item2 == 1 ||
+			item1 == 1 && item2 == 2||
+//					item1 == 2 && item2 == 23 ||
+//					item1 == 8 && item2 == 9 ||
+//					item1 == 7 && item2 == 8 ||
+//					item1 == 7 && item2 == 13 ||
+//					item1 == 7 && item2 == 18 ||
+//					item1 == 8 && item2 == 9 ||
+//					item1 == 9 && item2 == 49 ||
+//					item1 == 49 && item2 == 50 ||
+//					item1 == 50 && item2 == 56 ||
+//					item1 == 56 && item2 == 57 ||
+//					item1 == 56 && item2 == 62 ||
+//					item1 == 23 && item2 == 19 ||
 					false
 		},
 		

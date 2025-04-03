@@ -28,15 +28,14 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.toOffset
-import kotlin.math.min
 
 @Composable
 fun <T> AiGraph2(
 	items: List<T>,
-	itemColumn: (item: T) -> Int,
+	itemColumnKey: (item: T) -> Int,
 	linked: (item1: T, item2: T) -> Boolean,
 	modifier: Modifier = Modifier,
-	mainColumn: Int = 0,
+	mainColumnKey: Int = 0,
 	contentPadding: PaddingValues = PaddingValues(horizontal = 0.dp),
 	itemPadding: PaddingValues = PaddingValues(
 		horizontal = 16.dp,
@@ -78,8 +77,8 @@ fun <T> AiGraph2(
 		val nodes = calcNodes(
 			items = items,
 			placeables = placeables,
-			itemColumn = itemColumn,
-			mainColumn = mainColumn,
+			itemColumnKey = itemColumnKey,
+			mainColumnKey = mainColumnKey,
 			linked = linked,
 			itemPaddingLeft = itemPaddingLeft,
 			itemPaddingTop = itemPaddingTop,
@@ -202,8 +201,8 @@ fun <T> AiGraph2(
 private fun <T> calcNodes(
 	items: List<T>,
 	placeables: List<Placeable>,
-	itemColumn: (item: T) -> Int,
-	mainColumn: Int,
+	itemColumnKey: (item: T) -> Int,
+	mainColumnKey: Int,
 	linked: (item1: T, item2: T) -> Boolean,
 	itemPaddingLeft: Int,
 	itemPaddingTop: Int,
@@ -211,89 +210,67 @@ private fun <T> calcNodes(
 	itemPaddingBottom: Int
 ): List<Node<T>> {
 	val result = mutableListOf<Node<T>>()
-	val columns = items.groupBy { item ->
-		itemColumn(item)
-	}
-	
-	val columnIndexes = columns.keys.sortedDescending()
-	val xColumnPositions = columns
-		.mapValues { (_, items) ->
-			val maxColumnItemWidth = items.maxOfOrNull { item ->
-				val itemIndex = items.indexOf(item)
-				val placeable = placeables[itemIndex]
-				placeable.width
-			} ?: 0
-			itemPaddingLeft + maxColumnItemWidth + itemPaddingRight
-		}
-		.toSortedMap(reverseOrder())
-		.map(object : (Map.Entry<Int, Int>) -> Pair<Int, Int> {
-			var x = 0
-			override fun invoke(
-				columnIndexToWidth: Map.Entry<Int, Int>
-			): Pair<Int, Int> {
-				x -= columnIndexToWidth.value
-				return columnIndexToWidth.key to x
-			}
-		})
-		.toMap()
+	val columns = items.zip(placeables)
+		.groupBy { itemColumnKey(it.first) }
 		.toSortedMap()
 	
-	val yPositions = mutableMapOf<Int, Int>()
-	val maxYLimits = mutableMapOf<Int, Int>()
-	var currentRow = columns.maxOfOrNull { column -> column.value.size - 1 }
-		?.takeIf { size -> size >= 0 } ?: -1
+	val mainColumn = columns[mainColumnKey] ?: columns.entries.first().value
 	
-	while (currentRow >= 0) {
-		for (columnIndex in columnIndexes) {
-			val item = columns[columnIndex]?.getOrNull(currentRow) ?: continue
-			val itemIndex = items.indexOf(item)
-			val placeable = placeables[itemIndex]
-			val rightColumnIndexes = columnIndexes.filter { otherColumnIndex -> otherColumnIndex > columnIndex }
-			val rightColumns = columns.filter { column -> rightColumnIndexes.contains(column.key) }
-			val itemHasChildren = rightColumns.any { rightColumn ->
-				val rightColumnItems = rightColumn.value
-				rightColumnItems.any { rightColumnItem -> linked(item, rightColumnItem) }
-			}
-			
-			val leftColumnIndexes = columnIndexes.filter { otherColumnIndex -> otherColumnIndex < columnIndex }
-			val leftColumns = columns.filter { column -> leftColumnIndexes.contains(column.key) }
-			
-			val itemHeight = itemPaddingBottom + placeable.height + itemPaddingTop
-			val maxYLimit = maxYLimits[columnIndex] ?: 0
-			val nodeY = yPositions[columnIndex] ?: -itemHeight
-			leftColumnIndexes.forEach { leftColumnIndex ->
-				val currentLeftColumnItemPosY = yPositions[leftColumnIndex] ?: 0
-				yPositions[leftColumnIndex] = min(currentLeftColumnItemPosY, nodeY)
-			}
-			result += Node(
-				item = item,
-				placeable = placeable,
-				position = IntOffset(
-					x = xColumnPositions[columnIndex] ?: continue,
-					y = nodeY
-				)
-			)
-			yPositions[columnIndex] = nodeY
-		}
-		currentRow--
+	val columnsOfItems = columns.mapValues { (_, itemAndPlaceableList) ->
+		itemAndPlaceableList.map { itemAndPlaceable -> itemAndPlaceable.first }
 	}
 	
-	val minX = xColumnPositions.values.minOrNull() ?: 0
-	val maxX = xColumnPositions.values.maxOrNull() ?: minX
-	val columnsWidth = maxX - minX
-	val minY = result.minOfOrNull { node -> node.position.y } ?: 0
-	val maxY = result.maxOfOrNull { node -> node.position.y } ?: minY
-	val columnsHeight = maxY - minY
-	
-	return result.map { node ->
-		node.copy(
-			position = IntOffset(
-				x = node.position.x + 4000,
-				y = node.position.y + 4000
-			)
+	for ((item, _) in mainColumn) {
+		val roots = findRoots(
+			item = item,
+			itemColumnKeyProvider = itemColumnKey,
+			columns = columnsOfItems,
+			linked = linked
 		)
+		
+		
+	}
+	
+	// TODO
+	
+	return result
+}
+
+private fun <T> findRoots(
+	item: T,
+	itemColumnKeyProvider: (item: T) -> Int,
+	columns: Map<Int, List<T>>,
+	linked: (item1: T, item2: T) -> Boolean,
+): List<T> {
+	val itemColumnKey = itemColumnKeyProvider(item)
+	val parents = columns
+		.filterKeys { columnKey ->
+			columnKey < itemColumnKey
+		}
+		.mapValues { (_, otherItems) ->
+			otherItems.filter { otherItem -> linked(item, otherItem) }
+		}
+		.toSortedMap()
+		.flatMap { (_, parents) -> parents }
+	
+	return if(parents.isEmpty()) {
+		listOf(item)
+	} else {
+		parents.flatMap { parent ->
+			findRoots(
+				item = parent,
+				itemColumnKeyProvider = itemColumnKeyProvider,
+				columns = columns,
+				linked = linked
+			)
+		}
 	}
 }
+
+private data class Branch<T>(
+	val item: T,
+	val children: List<Branch<T>>
+)
 
 private data class Node<T>(
 	val item: T,
@@ -379,7 +356,7 @@ private fun AiGraphPreview2() {
 		items = remember {
 			(0..100).toList()
 		},
-		itemColumn = { item ->
+		itemColumnKey = { item ->
 			if (item == 50) {
 				0
 			} else {
