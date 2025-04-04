@@ -1,45 +1,31 @@
 package com.lauruspa.life_management.core.ui.component.a2
 
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.AnimationSpec
-import androidx.compose.animation.core.VectorConverter
-import androidx.compose.animation.core.exponentialDecay
-import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.gestures.rememberTransformableState
-import androidx.compose.foundation.gestures.transformable
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.Placeable
 import androidx.compose.ui.layout.SubcomposeLayout
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntRect
@@ -48,132 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.toOffset
 import kotlin.math.max
 import kotlin.math.min
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.launch
 
-/**
- * Состояние графа, управляющее масштабом, смещением и позициями элементов.
- */
-class GraphState<T>(
-	initialScale: Float = 1f,
-	initialOffset: Offset = Offset.Zero,
-	val minScale: Float = 0.5f,
-	val maxScale: Float = 2f
-) {
-	var scale by mutableStateOf(initialScale)
-		private set
-	
-	var offset by mutableStateOf(initialOffset)
-		private set
-	
-	var contentSize by mutableStateOf(Size.Zero)
-	var viewportSize by mutableStateOf(Size.Zero)
-	val itemPositions = mutableMapOf<T, IntRect>()
-	
-	private val scaleVelocity = Animatable(0f)
-	private val offsetVelocity = Animatable(Offset.Zero, Offset.VectorConverter)
-	
-	fun updateScale(newScale: Float) {
-		scale = newScale.coerceIn(minScale, maxScale)
-	}
-	
-	fun updateOffset(newOffset: Offset) {
-		offset = boundedTranslation(newOffset, contentSize, scale, viewportSize)
-	}
-	
-	suspend fun animateScaleTo(targetScale: Float, animationSpec: AnimationSpec<Float> = tween(300)) {
-		val startScale = scale
-		val endScale = targetScale.coerceIn(minScale, maxScale)
-		Animatable(startScale).animateTo(endScale, animationSpec) {
-			scale = value
-		}
-	}
-	
-	/** Анимированно перемещает и масштабирует граф к элементу */
-	suspend fun animateToItem(
-		item: T,
-		targetScale: Float = scale,
-		scaleAnimationSpec: AnimationSpec<Float> = tween(300),
-		offsetAnimationSpec: AnimationSpec<Offset> = tween(300)
-	) {
-		val itemRect = itemPositions[item] ?: return
-		val itemCenter = Offset(itemRect.left + itemRect.width / 2f, itemRect.top + itemRect.height / 2f)
-		val viewportCenter = Offset(
-			x = viewportSize.width / 2f,
-			y = viewportSize.height / 2f
-		)
-		val targetOffset = viewportCenter - (itemCenter * targetScale)
-		val clampedTargetOffset = boundedTranslation(targetOffset, contentSize, targetScale, viewportSize)
-		coroutineScope {
-			launch { animateScaleTo(targetScale, scaleAnimationSpec) }
-			launch {
-				Animatable(offset, Offset.VectorConverter).animateTo(clampedTargetOffset, offsetAnimationSpec) {
-					offset = value
-				}
-			}
-		}
-	}
-	
-	// New fling animation function
-	suspend fun applyFling(velocity: Offset) {
-		coroutineScope {
-			launch {
-				val scaleFling = scaleVelocity.animateDecay(
-					initialVelocity = velocity.x / 1000f, // Adjust this factor as needed
-					animationSpec = floatDecaySpec()
-				)
-				updateScale(scale + scaleFling.value)
-			}
-			launch {
-				offsetVelocity.animateDecay(
-					initialVelocity = velocity,
-					animationSpec = offsetDecaySpec()
-				) {
-					updateOffset(offset + value)
-				}
-			}
-		}
-	}
-	
-	/** Ограничивает смещение, чтобы контент не выходил за пределы области просмотра */
-	internal fun boundedTranslation(offset: Offset, contentSize: Size, scale: Float, viewportSize: Size): Offset {
-		val scaledContentSize = contentSize * scale
-		val maxX = if (scaledContentSize.width > viewportSize.width) {
-			(scaledContentSize.width - viewportSize.width) / 2
-		} else 0f
-		val maxY = if (scaledContentSize.height > viewportSize.height) {
-			(scaledContentSize.height - viewportSize.height) / 2
-		} else 0f
-		return Offset(
-			offset.x.coerceIn(-maxX, maxX),
-			offset.y.coerceIn(-maxY, maxY)
-		)
-	}
-}
-
-private fun floatDecaySpec() = exponentialDecay<Float>(frictionMultiplier = 0.1f)
-private fun offsetDecaySpec() = exponentialDecay<Offset>(frictionMultiplier = 0.1f)
-
-@Composable
-fun <T> rememberGraphState(
-	initialScale: Float = 1f,
-	initialOffset: Offset = Offset.Zero,
-	minScale: Float = 0.5f,
-	maxScale: Float = 2f
-): GraphState<T> {
-	return remember {
-		GraphState(
-			initialScale = initialScale,
-			initialOffset = initialOffset,
-			minScale = minScale,
-			maxScale = maxScale
-		)
-	}
-}
-
-/**
- * Компонент графа с поддержкой скроллинга, зума и программного управления.
- */
 @Composable
 fun <T> Graph(
 	items: List<T>,
@@ -182,187 +43,246 @@ fun <T> Graph(
 	modifier: Modifier = Modifier,
 	mainColumnKey: Int = 0,
 	contentPadding: PaddingValues = PaddingValues(16.dp),
-	itemPadding: PaddingValues = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+	itemPadding: PaddingValues = PaddingValues(
+		horizontal = 16.dp,
+		vertical = 4.dp
+	),
 	sameColumnLinkPadding: Dp = 16.dp,
 	sameColumnLinkSideOnTheRight: (item1: T, item2: T) -> Boolean = { _, _ -> true },
-	graphState: GraphState<T> = remember { GraphState() },
-	state: GraphState<T> = rememberGraphState(),
 	item: @Composable (item: T) -> Unit
 ) {
-	val coroutineScope = rememberCoroutineScope()
-	
-	val transformState = rememberTransformableState { zoomChange, panChange, rotationChange ->
-		val newScale = (state.scale * zoomChange).coerceIn(state.minScale, state.maxScale)
-		val scaledPanChange = panChange / state.scale // Adjust offset based on current scale
-		var newOffset = state.offset + scaledPanChange
-		newOffset = state.boundedTranslation(newOffset, state.contentSize, newScale, state.viewportSize)
-		state.updateScale(newScale)
-		state.updateOffset(newOffset)
-	}
-	
-	BoxWithConstraints(
+	SubcomposeLayout(
 		modifier = modifier
 			.clipToBounds()
-			.transformable(
-				state = transformState,
-				onTransformationEnd = { velocity ->
-					coroutineScope.launch {
-						state.applyFling(velocity)
-					}
-				}
-			)
-	) {
-		state.viewportSize = with(LocalDensity.current) { Size(maxWidth.toPx(), maxHeight.toPx()) }
+			.verticalScroll(rememberScrollState())
+			.padding(contentPadding)
+	) { constraints ->
+		val itemPaddingLeft = itemPadding.calculateLeftPadding(layoutDirection)
+			.roundToPx()
+		val itemPaddingTop = itemPadding.calculateTopPadding()
+			.roundToPx()
+		val itemPaddingRight = itemPadding.calculateRightPadding(layoutDirection)
+			.roundToPx()
+		val itemPaddingBottom = itemPadding.calculateBottomPadding()
+			.roundToPx()
 		
-		SubcomposeLayout(
-			modifier = Modifier
-				.padding(contentPadding)
-				.graphicsLayer(
-					scaleX = state.scale,
-					scaleY = state.scale,
-					translationX = state.offset.x,
-					translationY = state.offset.y
-				)
-		) { constraints ->
-			val itemPaddingLeft = itemPadding.calculateLeftPadding(layoutDirection).roundToPx()
-			val itemPaddingTop = itemPadding.calculateTopPadding().roundToPx()
-			val itemPaddingRight = itemPadding.calculateRightPadding(layoutDirection).roundToPx()
-			val itemPaddingBottom = itemPadding.calculateBottomPadding().roundToPx()
+		val itemMeasurables = subcompose(GraphSlot.ITEMS) {
+			items.forEach { item -> item(item) }
+		}
+		
+		val placeables = itemMeasurables.map { measurable ->
+			measurable.measure(constraints.copy(minWidth = 0, minHeight = 0))
+		}
+		
+		val nodes = calcNodes(
+			items = items,
+			placeables = placeables,
+			itemColumnKeyProvider = itemColumnKey,
+			mainColumnKey = mainColumnKey,
+			linked = linked,
+			itemPaddingLeft = itemPaddingLeft,
+			itemPaddingTop = itemPaddingTop,
+			itemPaddingRight = itemPaddingRight,
+			itemPaddingBottom = itemPaddingBottom
+		)
+		
+		val links = nodes.map { node ->
+			val linkedNodes = nodes
+				.filter { otherNode -> linked(node.item, otherNode.item) }
 			
-			val itemMeasurables = subcompose(GraphSlot.ITEMS) {
-				items.forEach { item(it) }
-			}
-			
-			val placeables = itemMeasurables.map { it.measure(constraints.copy(minWidth = 0, minHeight = 0)) }
-			
-			val nodes = calcNodes(
-				items = items,
-				placeables = placeables,
-				itemColumnKeyProvider = itemColumnKey,
-				mainColumnKey = mainColumnKey,
-				linked = linked,
-				itemPaddingLeft = itemPaddingLeft,
-				itemPaddingTop = itemPaddingTop,
-				itemPaddingRight = itemPaddingRight,
-				itemPaddingBottom = itemPaddingBottom
-			)
-			
-			val links = nodes.flatMap { node ->
-				nodes.filter { otherNode -> linked(node.item, otherNode.item) }.map { linkedNode ->
-					// Логика расчета связей (без изменений)
-					val lineStart: IntOffset
-					val lineCenter: IntOffset
-					val lineEnd: IntOffset
-					if (node.position.x == linkedNode.position.x) {
-						val linkSideIsOnTheRight = sameColumnLinkSideOnTheRight(node.item, linkedNode.item)
-						if (linkSideIsOnTheRight) {
-							lineStart = IntOffset(node.position.x + node.placeable.width, node.position.y + node.placeable.height / 2)
-							lineEnd = IntOffset(linkedNode.position.x + linkedNode.placeable.width, linkedNode.position.y + linkedNode.placeable.height / 2)
-							lineCenter = IntOffset(lineStart.x + sameColumnLinkPadding.roundToPx(), lineStart.y + (lineEnd.y - lineStart.y) / 2)
-						} else {
-							lineStart = IntOffset(node.position.x, node.position.y + node.placeable.height / 2)
-							lineEnd = IntOffset(linkedNode.position.x, linkedNode.position.y + linkedNode.placeable.height / 2)
-							lineCenter = IntOffset(lineStart.x - sameColumnLinkPadding.roundToPx(), lineStart.y + (lineEnd.y - lineStart.y) / 2)
-						}
+			linkedNodes.map { linkedNode ->
+				val lineStart: IntOffset
+				val lineCenter: IntOffset
+				val lineEnd: IntOffset
+				
+				// Linked node is on the same X
+				if (node.position.x == linkedNode.position.x) {
+					val linkSideIsOnTheRight = sameColumnLinkSideOnTheRight(
+						node.item,
+						linkedNode.item
+					)
+					
+					if (linkSideIsOnTheRight) {
+						lineStart = IntOffset(
+							x = node.position.x + node.placeable.width,
+							y = node.position.y + node.placeable.height / 2
+						)
+						lineEnd = IntOffset(
+							x = linkedNode.position.x + node.placeable.width,
+							y = linkedNode.position.y + linkedNode.placeable.height / 2
+						)
+						lineCenter = IntOffset(
+							x = lineStart.x + sameColumnLinkPadding.roundToPx(),
+							y = lineStart.y + (lineEnd.y - lineStart.y) / 2
+						)
 					} else {
-						if (node.position.x < linkedNode.position.x) {
-							lineStart = IntOffset(node.position.x + node.placeable.width, node.position.y + node.placeable.height / 2)
-							lineEnd = IntOffset(linkedNode.position.x, linkedNode.position.y + linkedNode.placeable.height / 2)
-						} else {
-							lineStart = IntOffset(node.position.x, node.position.y + node.placeable.height / 2)
-							lineEnd = IntOffset(linkedNode.position.x + linkedNode.placeable.width, linkedNode.position.y + linkedNode.placeable.height / 2)
-						}
-						lineCenter = IntOffset(lineStart.x + (lineEnd.x - lineStart.x) / 2, lineStart.y + (lineEnd.y - lineStart.y) / 2)
-					}
-					Link(start = lineStart, center = lineCenter, end = lineEnd)
-				}
-			}
-			
-			val graphRect = calculateGraphRect(nodes, links, constraints, itemPaddingLeft, itemPaddingTop, itemPaddingRight, itemPaddingBottom)
-			val graphOffset = -graphRect.topLeft
-			val linesComponentPosition = linksRect(nodes, links)?.topLeft?.plus(graphOffset) ?: IntOffset.Zero
-			
-			val localLinks = if (links.isNotEmpty()) {
-				val linksRectTopLeft = linksRect(nodes, links)?.topLeft ?: IntOffset.Zero
-				links.map { it.copy(start = it.start - linksRectTopLeft, center = it.center - linksRectTopLeft, end = it.end - linksRectTopLeft) }
-			} else emptyList()
-			
-			val linesPlaceable = subcompose(GraphSlot.LINES) {
-				Canvas(Modifier.fillMaxSize()) {
-					localLinks.forEach { link ->
-						drawArrow(
-							start = link.start.toOffset(),
-							center = link.center.toOffset(),
-							end = link.end.toOffset(),
-							color = Color.Gray,
-							maxCornerRadiusPx = 8.dp.toPx(),
-							lineWidthPx = 1.dp.toPx(),
-							triangleLengthPx = 3.dp.toPx(),
-							triangleWidthPx = 7.dp.toPx()
+						lineStart = IntOffset(
+							x = node.position.x,
+							y = node.position.y + node.placeable.height / 2
+						)
+						lineEnd = IntOffset(
+							x = linkedNode.position.x,
+							y = linkedNode.position.y + linkedNode.placeable.height / 2
+						)
+						lineCenter = IntOffset(
+							x = lineStart.x - sameColumnLinkPadding.roundToPx(),
+							y = lineStart.y + (lineEnd.y - lineStart.y) / 2
 						)
 					}
+				} else {
+					if (node.position.x < linkedNode.position.x) {
+						lineStart = IntOffset(
+							x = node.position.x + node.placeable.width,
+							y = node.position.y + node.placeable.height / 2
+						)
+						lineEnd = IntOffset(
+							x = linkedNode.position.x,
+							y = linkedNode.position.y + linkedNode.placeable.height / 2
+						)
+					} else {
+						lineStart = IntOffset(
+							x = node.position.x,
+							y = node.position.y + node.placeable.height / 2
+						)
+						
+						lineEnd = IntOffset(
+							x = linkedNode.position.x + linkedNode.placeable.width,
+							y = linkedNode.position.y + linkedNode.placeable.height / 2
+						)
+					}
+					
+					lineCenter = IntOffset(
+						x = lineStart.x + (lineEnd.x - lineStart.x) / 2,
+						y = lineStart.y + (lineEnd.y - lineStart.y) / 2
+					)
 				}
-			}.first().measure(constraints.copy(minWidth = 0, minHeight = 0, maxWidth = linksRect(nodes, links)?.width ?: 0, maxHeight = linksRect(nodes, links)?.height ?: 0))
-			
-			// Сохранение размеров контента и позиций элементов
-			graphState.contentSize = Size(graphRect.width.toFloat(), graphRect.height.toFloat())
-			nodes.forEach { node ->
-				graphState.itemPositions[node.item] = IntRect(node.position, IntSize(node.placeable.width, node.placeable.height))
+				
+				Link(
+					start = lineStart,
+					center = lineCenter,
+					end = lineEnd
+				)
+			}
+		}
+			.flatten()
+		
+		val nodesRect = if (nodes.isNotEmpty()) {
+			IntRect(
+				topLeft = IntOffset(
+					x = nodes.minOf { node -> node.position.x } - itemPaddingLeft,
+					y = nodes.minOf { node -> node.position.y } - itemPaddingTop
+				),
+				bottomRight = IntOffset(
+					x = nodes.maxOf { node -> node.position.x + node.placeable.width } + itemPaddingRight,
+					y = nodes.maxOf { node -> node.position.y + node.placeable.height } + itemPaddingBottom
+				)
+			)
+		} else {
+			null
+		}
+		
+		val linksRect = if (links.isNotEmpty()) {
+			val linksPoints = links.flatMap { link ->
+				listOf(
+					link.start,
+					link.center,
+					link.end
+				)
 			}
 			
-			layout(graphRect.width, graphRect.height) {
-				linesPlaceable.place(linesComponentPosition.x, linesComponentPosition.y)
-				nodes.forEach { node ->
-					node.placeable.place(node.position.x + graphOffset.x, node.position.y + graphOffset.y)
+			IntRect(
+				topLeft = IntOffset(
+					x = linksPoints.minOf { linkPoint -> linkPoint.x },
+					y = linksPoints.minOf { linkPoint -> linkPoint.y }
+				),
+				bottomRight = IntOffset(
+					x = linksPoints.maxOf { linkPoint -> linkPoint.x },
+					y = linksPoints.maxOf { linkPoint -> linkPoint.y }
+				)
+			)
+		} else {
+			null
+		}
+		
+		val graphRect = when {
+			nodesRect != null && linksRect != null -> {
+				IntRect(
+					topLeft = IntOffset(
+						x = min(nodesRect.left, linksRect.left),
+						y = min(nodesRect.top, linksRect.top)
+					),
+					bottomRight = IntOffset(
+						x = max(nodesRect.right, linksRect.right),
+						y = max(nodesRect.bottom, linksRect.bottom)
+					)
+				)
+			}
+			
+			nodesRect != null -> nodesRect
+			linksRect != null -> linksRect
+			else -> {
+				IntRect(
+					offset = IntOffset.Zero,
+					size = IntSize(
+						width = constraints.minWidth,
+						height = constraints.minHeight
+					)
+				)
+			}
+		}
+		
+		val graphOffset = -graphRect.topLeft
+		val linesComponentPosition = linksRect?.topLeft?.plus(graphOffset) ?: IntOffset.Zero
+		
+		val localLinks = if (linksRect != null) {
+			links
+				.map { link ->
+					link.copy(
+						start = link.start - linksRect.topLeft,
+						center = link.center - linksRect.topLeft,
+						end = link.end - linksRect.topLeft
+					)
+				}
+		} else {
+			emptyList()
+		}
+		
+		val linesPlaceable = subcompose(GraphSlot.LINES) {
+			Canvas(Modifier.fillMaxSize()) {
+				localLinks.forEach { link ->
+					drawArrow(
+						start = link.start.toOffset(),
+						center = link.center.toOffset(),
+						end = link.end.toOffset(),
+						color = Color.Gray,
+						maxCornerRadiusPx = 8.dp.toPx(),
+						lineWidthPx = 1.dp.toPx(),
+						triangleLengthPx = 3.dp.toPx(),
+						triangleWidthPx = 7.dp.toPx()
+					)
 				}
 			}
 		}
-	}
-}
-
-// Вспомогательные функции (без изменений, но вынесены для читаемости)
-private fun <T> calculateGraphRect(
-	nodes: List<Node<T>>,
-	links: List<Link>,
-	constraints: Constraints,
-	itemPaddingLeft: Int,
-	itemPaddingTop: Int,
-	itemPaddingRight: Int,
-	itemPaddingBottom: Int
-): IntRect {
-	val nodesRect = if (nodes.isNotEmpty()) {
-		IntRect(
-			topLeft = IntOffset(
-				nodes.minOf { it.position.x } - itemPaddingLeft,
-				nodes.minOf { it.position.y } - itemPaddingTop
-			),
-			bottomRight = IntOffset(
-				nodes.maxOf { it.position.x + it.placeable.width } + itemPaddingRight,
-				nodes.maxOf { it.position.y + it.placeable.height } + itemPaddingBottom
+			.first()
+			.measure(
+				constraints.copy(
+					minWidth = 0,
+					minHeight = 0,
+					maxWidth = linksRect?.width ?: 0,
+					maxHeight = linksRect?.height ?: 0
+				)
 			)
-		)
-	} else null
-	
-	val linksRect = linksRect(nodes, links)
-	return when {
-		nodesRect != null && linksRect != null -> IntRect(
-			topLeft = IntOffset(min(nodesRect.left, linksRect.left), min(nodesRect.top, linksRect.top)),
-			bottomRight = IntOffset(max(nodesRect.right, linksRect.right), max(nodesRect.bottom, linksRect.bottom))
-		)
-		nodesRect != null -> nodesRect
-		linksRect != null -> linksRect
-		else -> IntRect(IntOffset.Zero, IntSize(constraints.minWidth, constraints.minHeight))
+		
+		layout(graphRect.width, graphRect.height) {
+			linesPlaceable.place(linesComponentPosition.x, linesComponentPosition.y)
+			nodes.forEach { node ->
+				node.placeable.place(
+					x = node.position.x + graphOffset.x,
+					y = node.position.y + graphOffset.y
+				)
+			}
+		}
 	}
-}
-
-private fun <T> linksRect(nodes: List<Node<T>>, links: List<Link>): IntRect? {
-	return if (links.isNotEmpty()) {
-		val linksPoints = links.flatMap { listOf(it.start, it.center, it.end) }
-		IntRect(
-			topLeft = IntOffset(linksPoints.minOf { it.x }, linksPoints.minOf { it.y }),
-			bottomRight = IntOffset(linksPoints.maxOf { it.x }, linksPoints.maxOf { it.y })
-		)
-	} else null
 }
 
 private fun <T> calcNodes(
