@@ -319,8 +319,14 @@ private fun <T> calcNodes(
 		.toSet()
 		.toList()
 	
+	// Сначала размещаем деревья с найденными корнями, потом все остальное.
+	val sortedItems = items.sortedWith(compareBy(nullsLast()) { item ->
+		roots.indexOf(item)
+			.takeIf { it >= 0 }
+	})
+	
 	return calcNodesByRoots(
-		roots = roots,
+		roots = sortedItems,
 		itemColumnKeyProvider = itemColumnKeyProvider,
 		linked = linked,
 		columns = columns,
@@ -599,8 +605,10 @@ private fun GraphPreview() {
 			
 		},
 		linked = { item1, item2 ->
-			// -3
-			item1 == 11 && item2 == 27 ||
+			// -5
+			item1 == 0 && item2 == 1 ||
+					// -3
+					item1 == 11 && item2 == 27 ||
 					item1 == 11 && item2 == 32 ||
 					item1 == 11 && item2 == 37 ||
 					item1 == 11 && item2 == 42 ||
