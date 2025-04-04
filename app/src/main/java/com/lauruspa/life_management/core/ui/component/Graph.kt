@@ -3,13 +3,9 @@ package com.lauruspa.life_management.core.ui.component
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.scrollable
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -30,12 +26,14 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.Placeable
 import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.toOffset
+import kotlin.math.max
+import kotlin.math.min
 
 @Composable
 fun <T> Graph(
@@ -44,18 +42,20 @@ fun <T> Graph(
 	linked: (item1: T, item2: T) -> Boolean,
 	modifier: Modifier = Modifier,
 	mainColumnKey: Int = 0,
-	contentPadding: PaddingValues = PaddingValues(horizontal = 0.dp),
+	contentPadding: PaddingValues = PaddingValues(16.dp),
 	itemPadding: PaddingValues = PaddingValues(
 		horizontal = 16.dp,
 		vertical = 4.dp
 	),
 	sameColumnLinkPadding: Dp = 16.dp,
 	sameColumnLinkSideOnTheRight: (item1: T, item2: T) -> Boolean = { _, _ -> true },
-	debug: Boolean = false,
 	item: @Composable (item: T) -> Unit
 ) {
 	SubcomposeLayout(
-		modifier = modifier.clipToBounds()
+		modifier = modifier
+			.clipToBounds()
+			.verticalScroll(rememberScrollState())
+			.padding(contentPadding)
 	) { constraints ->
 		val itemPaddingLeft = itemPadding.calculateLeftPadding(layoutDirection)
 			.roundToPx()
@@ -64,15 +64,6 @@ fun <T> Graph(
 		val itemPaddingRight = itemPadding.calculateRightPadding(layoutDirection)
 			.roundToPx()
 		val itemPaddingBottom = itemPadding.calculateBottomPadding()
-			.roundToPx()
-		val itemPaddingHorizontal = itemPaddingLeft + itemPaddingRight
-		val itemPaddingVertical = itemPaddingTop + itemPaddingBottom
-		
-		val contentPaddingLeft = contentPadding.calculateLeftPadding(layoutDirection)
-			.roundToPx()
-		val contentPaddingTop = contentPadding.calculateTopPadding()
-			.roundToPx()
-		val contentPaddingRight = contentPadding.calculateRightPadding(layoutDirection)
 			.roundToPx()
 		
 		val itemMeasurables = subcompose(GraphSlot.ITEMS) {
@@ -175,9 +166,90 @@ fun <T> Graph(
 		}
 			.flatten()
 		
+		val nodesRect = if (nodes.isNotEmpty()) {
+			IntRect(
+				topLeft = IntOffset(
+					x = nodes.minOf { node -> node.position.x } - itemPaddingLeft,
+					y = nodes.minOf { node -> node.position.y } - itemPaddingTop
+				),
+				bottomRight = IntOffset(
+					x = nodes.maxOf { node -> node.position.x + node.placeable.width } + itemPaddingRight,
+					y = nodes.maxOf { node -> node.position.y + node.placeable.height } + itemPaddingBottom
+				)
+			)
+		} else {
+			null
+		}
+		
+		val linksRect = if (links.isNotEmpty()) {
+			val linksPoints = links.flatMap { link ->
+				listOf(
+					link.start,
+					link.center,
+					link.end
+				)
+			}
+			
+			IntRect(
+				topLeft = IntOffset(
+					x = linksPoints.minOf { linkPoint -> linkPoint.x },
+					y = linksPoints.minOf { linkPoint -> linkPoint.y }
+				),
+				bottomRight = IntOffset(
+					x = linksPoints.maxOf { linkPoint -> linkPoint.x },
+					y = linksPoints.maxOf { linkPoint -> linkPoint.y }
+				)
+			)
+		} else {
+			null
+		}
+		
+		val graphRect = when {
+			nodesRect != null && linksRect != null -> {
+				IntRect(
+					topLeft = IntOffset(
+						x = min(nodesRect.left, linksRect.left),
+						y = min(nodesRect.top, linksRect.top)
+					),
+					bottomRight = IntOffset(
+						x = max(nodesRect.right, linksRect.right),
+						y = max(nodesRect.bottom, linksRect.bottom)
+					)
+				)
+			}
+			
+			nodesRect != null -> nodesRect
+			linksRect != null -> linksRect
+			else -> {
+				IntRect(
+					offset = IntOffset.Zero,
+					size = IntSize(
+						width = constraints.minWidth,
+						height = constraints.minHeight
+					)
+				)
+			}
+		}
+		
+		val graphOffset = -graphRect.topLeft
+		val linesComponentPosition = linksRect?.topLeft?.plus(graphOffset) ?: IntOffset.Zero
+		
+		val localLinks = if (linksRect != null) {
+			links
+				.map { link ->
+					link.copy(
+						start = link.start - linksRect.topLeft,
+						center = link.center - linksRect.topLeft,
+						end = link.end - linksRect.topLeft
+					)
+				}
+		} else {
+			emptyList()
+		}
+		
 		val linesPlaceable = subcompose(GraphSlot.LINES) {
 			Canvas(Modifier.fillMaxSize()) {
-				links.forEach { link ->
+				localLinks.forEach { link ->
 					drawArrow(
 						start = link.start.toOffset(),
 						center = link.center.toOffset(),
@@ -190,37 +262,25 @@ fun <T> Graph(
 					)
 				}
 			}
-		}.first()
-			.measure(constraints.copy(minWidth = 0, minHeight = 0))
+		}
+			.first()
+			.measure(
+				constraints.copy(
+					minWidth = 0,
+					minHeight = 0,
+					maxWidth = linksRect?.width ?: 0,
+					maxHeight = linksRect?.height ?: 0
+				)
+			)
 		
-		val debugPlaceable = if (debug) {
-			subcompose(GraphSlot.DEBUG) {
-				Column {
-					Text(text = "Nodes count: ${nodes.size}")
-					nodes.forEach { node ->
-						Text(
-							text = "Value: ${node.item}; Position: ${node.position}"
-						)
-					}
-				}
-			}.first()
-				.measure(constraints.copy(minWidth = 0, minHeight = 0))
-		} else null
-		
-		val graphSize = calcComponentSize(
-			constraints = constraints,
-			nodes = nodes,
-			links = links,
-			itemPaddingHorizontal = itemPaddingHorizontal,
-			itemPaddingVertical = itemPaddingVertical
-		)
-		
-		layout(graphSize.width, graphSize.height) {
-			linesPlaceable.place(0, 0)
+		layout(graphRect.width, graphRect.height) {
+			linesPlaceable.place(linesComponentPosition.x, linesComponentPosition.y)
 			nodes.forEach { node ->
-				node.placeable.place(node.position.x, node.position.y)
+				node.placeable.place(
+					x = node.position.x + graphOffset.x,
+					y = node.position.y + graphOffset.y
+				)
 			}
-			debugPlaceable?.place(0, 0)
 		}
 	}
 }
@@ -417,7 +477,6 @@ private fun <T> calcNodesByRoots(
 					linked(root, otherItem)
 				}
 			}
-//			.filterValues { otherItemToPlaceableList -> otherItemToPlaceableList.isNotEmpty() }
 			.toSortedMap(reverseOrder())
 			.values
 			.flatten()
@@ -445,36 +504,6 @@ private fun <T> calcNodesByRoots(
 	return result
 }
 
-private fun <T> calcComponentSize(
-	constraints: Constraints,
-	nodes: List<Node<T>>,
-	links: List<Link>,
-	itemPaddingHorizontal: Int,
-	itemPaddingVertical: Int
-): IntSize {
-	
-	val nodesWidth: Int
-	val nodesHeight: Int
-	if (nodes.isNotEmpty()) {
-		val nodeMinX = nodes.minOf { node -> node.position.x }
-		val nodeMaxX = nodes.maxOf { node -> node.position.x + node.placeable.width }
-		val nodeMinY = nodes.minOf { node -> node.position.y }
-		val nodeMaxY = nodes.maxOf { node -> node.position.y + node.placeable.height }
-		nodesWidth = nodeMaxX - nodeMinX + itemPaddingHorizontal
-		nodesHeight = nodeMaxY - nodeMinY + itemPaddingVertical
-	} else {
-		nodesWidth = 0
-		nodesHeight = 0
-	}
-	
-	// TODO: handle links
-	
-	return IntSize(
-		width = nodesWidth.coerceAtLeast(constraints.minWidth),
-		height = nodesHeight.coerceAtLeast(constraints.minHeight)
-	)
-}
-
 private data class Node<T>(
 	val item: T,
 	val placeable: Placeable,
@@ -483,8 +512,7 @@ private data class Node<T>(
 
 private enum class GraphSlot {
 	ITEMS,
-	LINES,
-	DEBUG
+	LINES
 }
 
 private data class Link(
@@ -640,8 +668,8 @@ private fun GraphPreview() {
 			Text(
 				text = when (item) {
 					13 -> "13\n13"
-				    34 -> "34\n".repeat(4)
-				    37 -> "37\n".repeat(4)
+					34 -> "34\n".repeat(4)
+					37 -> "37\n".repeat(4)
 					else -> item.toString()
 				},
 				modifier = Modifier.padding(16.dp),
