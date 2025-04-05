@@ -1,19 +1,26 @@
-package com.lauruspa.life_management.core.ui.component
+package com.lauruspa.life_management.core.ui.component.graph
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
@@ -32,8 +39,75 @@ import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.toOffset
+import kotlinx.coroutines.launch
 import kotlin.math.max
 import kotlin.math.min
+
+@Immutable
+data class GraphLayoutInfo(
+	val itemRectList: List<IntRect>,
+	val graphContentSize: IntSize
+) {
+	companion object {
+		@Stable
+		internal val Zero: GraphLayoutInfo
+			get() = GraphLayoutInfo(
+				itemRectList = emptyList(),
+				graphContentSize = IntSize.Zero
+			)
+	}
+}
+
+@Stable
+class GraphState internal constructor(
+	initialLayoutInfo: GraphLayoutInfo,
+) {
+	
+	@Suppress("MemberVisibilityCanBePrivate")
+	@Volatile
+	var layoutInfo: GraphLayoutInfo = initialLayoutInfo
+		internal set
+	
+	/**
+	 * Осуществляет анимированное изменение зума до нового значения [zoom].
+	 */
+	suspend fun animateZoom(zoom: Float) {
+		// TODO:
+	}
+	
+	/**
+	 * Осуществялет анимированное смещение центра видимой области графа максимально близко к центру элемента графа, выбранного по
+	 * [index] этого элемента из items. Зум при этом изменяется таким образом, что видимая область вмещает только этот
+	 * элемент.
+	 */
+	suspend fun animateMoveToItem(
+		index: Int
+	) {
+		// TODO
+	}
+	
+	/**
+	 * Осуществялет анимированное смещение центра видимой области графа максимально близко к центру элементов графа, выбранных по
+	 * [indexes] этих элементов из items. Зум при этом изменяется таким образом, что видимая область вмещает только эти
+	 * элементы.
+	 */
+	suspend fun animateMoveToItems(
+		vararg indexes: Int
+	) {
+		// TODO
+	}
+}
+
+@Composable
+fun rememberGraphState(
+	initialLayoutInfo: GraphLayoutInfo = GraphLayoutInfo.Zero
+): GraphState {
+	return remember {
+		GraphState(
+			initialLayoutInfo = initialLayoutInfo
+		)
+	}
+}
 
 @Composable
 fun <T> Graph(
@@ -41,6 +115,7 @@ fun <T> Graph(
 	itemColumnKey: (item: T) -> Int,
 	linked: (item1: T, item2: T) -> Boolean,
 	modifier: Modifier = Modifier,
+	state: GraphState = rememberGraphState(),
 	mainColumnKey: Int = 0,
 	contentPadding: PaddingValues = PaddingValues(16.dp),
 	itemPadding: PaddingValues = PaddingValues(
@@ -272,6 +347,23 @@ fun <T> Graph(
 					maxHeight = linksRect?.height ?: 0
 				)
 			)
+		
+		state.layoutInfo = GraphLayoutInfo(
+			itemRectList = items.map { item ->
+				nodes
+					.firstOrNull { otherNode -> otherNode.item == item }
+					?.let { node ->
+						IntRect(
+							offset = node.position,
+							size = IntSize(
+								width = node.placeable.width,
+								height = node.placeable.height
+							)
+						)
+					} ?: IntRect.Zero
+			},
+			graphContentSize = graphRect.size
+		)
 		
 		layout(graphRect.width, graphRect.height) {
 			linesPlaceable.place(linesComponentPosition.x, linesComponentPosition.y)
@@ -585,96 +677,139 @@ private fun GraphPreview() {
 		}
 	}
 	
-	Graph(
-		items = remember {
-			(0..100).toList()
-		},
-		itemColumnKey = { item ->
-			if (item == 50) {
-				0
-			} else {
-				val columnIndex = itemLevel(item)
-				if (columnIndex == -1 || columnIndex == 1) 0 else columnIndex
-			}
+	val graphState = rememberGraphState()
+	val coroutineScope = rememberCoroutineScope()
+	
+	Column(Modifier.fillMaxSize()) {
+		Graph(
+			items = remember {
+				(0..100).toList()
+			},
+			itemColumnKey = { item ->
+				if (item == 50) {
+					0
+				} else {
+					val columnIndex = itemLevel(item)
+					if (columnIndex == -1 || columnIndex == 1) 0 else columnIndex
+				}
+				
+			},
+			linked = { item1, item2 ->
+				// -3
+				item1 == 11 && item2 == 27 ||
+						item1 == 11 && item2 == 32 ||
+						item1 == 11 && item2 == 37 ||
+						item1 == 11 && item2 == 42 ||
+						
+						// -2
+						item1 == 12 && item2 == 13 ||
+						item1 == 17 && item2 == 13 ||
+						item1 == 22 && item2 == 24 ||
+						item1 == 27 && item2 == 28 ||
+						item1 == 27 && item2 == 33 ||
+						item1 == 27 && item2 == 38 ||
+						item1 == 47 && item2 == 44 ||
+						
+						// -1
+						item1 == 3 && item2 == 4 ||
+						item1 == 8 && item2 == 4 ||
+						item1 == 13 && item2 == 14 ||
+						item1 == 18 && item2 == 19 ||
+						item1 == 28 && item2 == 29 ||
+						
+						// 0
+						item1 == 19 && item2 == 50 ||
+						item1 == 50 && item2 == 55 ||
+						item1 == 55 && item2 == 61 ||
+						item1 == 55 && item2 == 71 ||
+						item1 == 55 && item2 == 81 ||
+						item1 == 65 && item2 == 81 ||
+						item1 == 75 && item2 == 56 ||
+						item1 == 75 && item2 == 66 ||
+						item1 == 75 && item2 == 76 ||
+						
+						// 1
+						item1 == 61 && item2 == 57 ||
+						item1 == 71 && item2 == 67 ||
+						item1 == 71 && item2 == 77 ||
+						item1 == 71 && item2 == 82 ||
+						item1 == 81 && item2 == 52 ||
+						
+						// 2
+						item1 == 56 && item2 == 58 ||
+						item1 == 56 && item2 == 68 ||
+						item1 == 66 && item2 == 52
+			},
 			
-		},
-		linked = { item1, item2 ->
-			// -3
-			item1 == 11 && item2 == 27 ||
-					item1 == 11 && item2 == 32 ||
-					item1 == 11 && item2 == 37 ||
-					item1 == 11 && item2 == 42 ||
-					
-					// -2
-					item1 == 12 && item2 == 13 ||
-					item1 == 17 && item2 == 13 ||
-					item1 == 22 && item2 == 24 ||
-					item1 == 27 && item2 == 28 ||
-					item1 == 27 && item2 == 33 ||
-					item1 == 27 && item2 == 38 ||
-					item1 == 47 && item2 == 44 ||
-					
-					// -1
-					item1 == 3 && item2 == 4 ||
-					item1 == 8 && item2 == 4 ||
-					item1 == 13 && item2 == 14 ||
-					item1 == 18 && item2 == 19 ||
-					item1 == 28 && item2 == 29 ||
-					
-					// 0
-					item1 == 19 && item2 == 50 ||
-					item1 == 50 && item2 == 55 ||
-					item1 == 55 && item2 == 61 ||
-					item1 == 55 && item2 == 71 ||
-					item1 == 55 && item2 == 81 ||
-					item1 == 65 && item2 == 81 ||
-					item1 == 75 && item2 == 56 ||
-					item1 == 75 && item2 == 66 ||
-					item1 == 75 && item2 == 76 ||
-					
-					// 1
-					item1 == 61 && item2 == 57 ||
-					item1 == 71 && item2 == 67 ||
-					item1 == 71 && item2 == 77 ||
-					item1 == 71 && item2 == 82 ||
-					item1 == 81 && item2 == 52 ||
-					
-					// 2
-					item1 == 56 && item2 == 58 ||
-					item1 == 56 && item2 == 68 ||
-					item1 == 66 && item2 == 52 ||
-					
-					false
-		},
+			modifier = Modifier
+				.weight(1f)
+				.background(Color.LightGray),
+			state = graphState,
+			sameColumnLinkSideOnTheRight = { item1, _ ->
+				val columnIndex = itemLevel(item1)
+				columnIndex < 0
+			},
+		) { item ->
+			Card(
+				modifier = Modifier.width(100.dp),
+				colors = CardDefaults.cardColors(
+					containerColor = Color.White
+				),
+				border = BorderStroke(
+					width = 1.dp,
+					color = Color.Gray
+				)
+			) {
+				Text(
+					text = when (item) {
+						13 -> "13\n13"
+						34 -> "34\n".repeat(4)
+						37 -> "37\n".repeat(4)
+						else -> item.toString()
+					},
+					modifier = Modifier.padding(16.dp),
+					color = Color.Black
+				)
+			}
+		}
 		
-		modifier = Modifier
-			.fillMaxSize()
-			.background(Color.LightGray),
-		sameColumnLinkSideOnTheRight = { item1, _ ->
-			val columnIndex = itemLevel(item1)
-			columnIndex < 0
-		},
-	) { item ->
-		Card(
-			modifier = Modifier.width(100.dp),
-			colors = CardDefaults.cardColors(
-				containerColor = Color.White
-			),
-			border = BorderStroke(
-				width = 1.dp,
-				color = Color.Gray
-			)
-		) {
-			Text(
-				text = when (item) {
-					13 -> "13\n13"
-					34 -> "34\n".repeat(4)
-					37 -> "37\n".repeat(4)
-					else -> item.toString()
-				},
-				modifier = Modifier.padding(16.dp),
-				color = Color.Black
-			)
+		Row(Modifier.fillMaxWidth()) {
+			Button(
+				onClick = {
+					coroutineScope.launch {
+						graphState.animateZoom(zoom = 0.5f)
+					}
+				}
+			) {
+				Text(text = "Zoom 0.5")
+			}
+			Button(
+				onClick = {
+					coroutineScope.launch {
+						graphState.animateZoom(zoom = 2f)
+					}
+				}
+			) {
+				Text(text = "Zoom 2")
+			}
+			Button(
+				onClick = {
+					coroutineScope.launch {
+						graphState.animateMoveToItem(index = 3)
+					}
+				}
+			) {
+				Text(text = "To 4")
+			}
+			Button(
+				onClick = {
+					coroutineScope.launch {
+						graphState.animateMoveToItems(55, 61, 57)
+					}
+				}
+			) {
+				Text(text = "To 55, 61, 57")
+			}
 		}
 	}
 }
