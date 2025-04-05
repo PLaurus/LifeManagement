@@ -8,12 +8,13 @@ activityCompose = "1.9.3"
 lifecycleViewModelCompose = "2.8.7"
 junit = "4.13.2"
 junitVersion = "1.2.1"
-agp = "8.6.0"
-kotlin = "1.9.0"
 kotlinCompilerExtension = "1.5.1"
 retrofit = "2.11.0"
 espressoCore = "3.6.1"
 appcompat = "1.6.1"
+
+agp = "8.6.0"
+kotlin = "1.9.0"
 
 [libraries]
 # The Core KTX module provides extensions for common libraries that are part of the Android framework
@@ -55,3 +56,4 @@ androidx-appcompat = { group = "androidx.appcompat", name = "appcompat", version
 android-application = { id = "com.android.application", version.ref = "agp" }
 jetbrains-kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 android-library = { id = "com.android.library", version.ref = "agp" }
+kotlin-parcelize = { id = "org.jetbrains.kotlin.plugin.parcelize", version.ref = "kotlin" }

@@ -1,6 +1,13 @@
 <resources>
 	<string name="app_name">LifeManagement</string>
 	<string name="main_open_bottom_sheet_button">Open bottom sheet</string>
+	<string name="week_day_monday_short_lowercase">пн</string>
+	<string name="week_day_tuesday_short_lowercase">вт</string>
+	<string name="week_day_wednesday_short_lowercase">ср</string>
+	<string name="week_day_thursday_short_lowercase">чт</string>
+	<string name="week_day_friday_short_lowercase">пт</string>
+	<string name="week_day_saturday_short_lowercase">сб</string>
+	<string name="week_day_sunday_short_lowercase">вс</string>
 	
 	<!-- Tasks fragment -->
 	<string name="tasks_fragment_create_task_button">Create task</string>
