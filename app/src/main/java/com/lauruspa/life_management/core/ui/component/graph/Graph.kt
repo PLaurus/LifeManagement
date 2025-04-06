@@ -28,11 +28,13 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.mapSaver
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
@@ -119,16 +121,6 @@ class GraphState internal constructor(
 	internal val limitPan: Boolean = GraphDefaults.LIMIT_PAN,
 	initialLayoutInfo: GraphLayoutInfo = GraphDefaults.INITIAL_LAYOUT_INFO
 ) {
-//	var maxXValue: Int
-//		get() = _maxXValueState.intValue
-//		internal set(newMax) {
-//			_maxXValueState.intValue = newMax
-//			Snapshot.withoutReadObservation {
-//				if (xValue > newMax) {
-//					xValue = newMax
-//				}
-//			}
-//		}
 	
 	init {
 		require(minZoom > 0) { "minZoom must be > 0" }
@@ -148,7 +140,11 @@ class GraphState internal constructor(
 	var layoutInfo: GraphLayoutInfo = initialLayoutInfo
 		internal set(value) {
 			field = value
-			if(pannable) updatePanBounds()
+			if (pannable) {
+				Snapshot.withoutReadObservation {
+					updatePanBounds()
+				}
+			}
 		}
 	
 	@Suppress("MemberVisibilityCanBePrivate")
@@ -290,7 +286,7 @@ class GraphState internal constructor(
 	 * Resets to bounds with animation and resets tracking for fling animation
 	 */
 	private suspend fun resetToValidBounds() {
-		val zoom = zoom.coerceAtLeast(1f)
+		val zoom = zoom.coerceAtLeast(minZoom)
 		val bounds = getPanBounds()
 		val pan = pan.coerceIn(
 			horizontalRange = bounds.left..bounds.right,
@@ -353,16 +349,16 @@ class GraphState internal constructor(
 	}
 	
 	suspend fun updateCameraPosition(
-		newZoomProvider: suspend (GraphLayoutInfo) -> GraphCameraPosition
+		cameraPositionProvider: suspend GraphCameraPositionCalculator.(GraphState) -> GraphCameraPosition
 	) = cameraPositionChangeMutex.mutate {
-		val newZoomState = newZoomProvider(layoutInfo)
+		val newCameraPosition = cameraPositionCalculator.cameraPositionProvider(this@GraphState)
 		
-		snapZoomStateTo(newZoomState.zoom)
-		snapRotationStateTo(newZoomState.rotation)
+		snapZoomStateTo(newCameraPosition.zoom)
+		snapRotationStateTo(newCameraPosition.rotation)
 		
 		if (pannable) {
 			updatePanBounds()
-			snapPanStateTo(newZoomState.pan)
+			snapPanStateTo(newCameraPosition.pan)
 		}
 	}
 	
@@ -759,6 +755,7 @@ fun <T> Graph(
 	linked: (item1: T, item2: T) -> Boolean,
 	modifier: Modifier = Modifier,
 	state: GraphState = rememberGraphState(),
+	initialCenteredItemIndex: Int? = null,
 	mainColumnKey: Int = 0,
 	contentPadding: PaddingValues = PaddingValues(16.dp),
 	itemPadding: PaddingValues = PaddingValues(
@@ -771,6 +768,23 @@ fun <T> Graph(
 	item: @Composable (item: T) -> Unit
 ) {
 	val coroutineScope = rememberCoroutineScope()
+	
+	LaunchedEffect(state) {
+		
+		coroutineScope.launch {
+			state.updateCameraPosition {
+				if (initialCenteredItemIndex != null) {
+					itemsCenter(
+						zoom = state.initialZoom,
+						itemIndexes = listOf(initialCenteredItemIndex)
+					)
+				} else {
+					itemsCenter(zoom = state.initialZoom)
+				}
+			}
+		}
+	}
+	
 	SubcomposeLayout(
 		modifier = modifier
 			.clipToBounds()
