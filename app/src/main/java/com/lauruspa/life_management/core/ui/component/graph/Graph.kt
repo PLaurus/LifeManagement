@@ -146,7 +146,10 @@ class GraphState internal constructor(
 	@Suppress("MemberVisibilityCanBePrivate")
 	@Volatile
 	var layoutInfo: GraphLayoutInfo = initialLayoutInfo
-		internal set
+		internal set(value) {
+			field = value
+			if(pannable) updatePanBounds()
+		}
 	
 	@Suppress("MemberVisibilityCanBePrivate")
 	internal val animatablePan = Animatable(initialPan, Offset.VectorConverter)

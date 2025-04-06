@@ -59,7 +59,10 @@ class HoneyCombsState internal constructor(
     @Suppress("MemberVisibilityCanBePrivate")
     @Volatile
     var layoutInfo: HoneyCombsLayoutInfo = initialLayoutInfo
-        internal set
+        internal set(value) {
+            field = value
+            if(pannable) updatePanBounds()
+        }
 
     @Suppress("MemberVisibilityCanBePrivate")
     internal val animatablePan = Animatable(initialPan, Offset.VectorConverter)
