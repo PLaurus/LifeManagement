@@ -1509,6 +1509,7 @@ private fun GraphPreview() {
 			
 			modifier = Modifier
 				.weight(1f)
+				.fillMaxWidth()
 				.background(Color.LightGray),
 			state = graphState,
 			sameColumnLinkSideOnTheRight = { item1, _ ->
