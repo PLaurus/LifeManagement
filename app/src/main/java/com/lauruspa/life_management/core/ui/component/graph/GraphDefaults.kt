@@ -3,7 +3,7 @@ package com.lauruspa.life_management.core.ui.component.graph
 import androidx.compose.ui.geometry.Offset
 
 object GraphDefaults {
-	const val MIN_ZOOM = 0.25f
+	const val MIN_ZOOM = 0.5f
 	const val MAX_ZOOM = 3f
 	const val INITIAL_ZOOM = 1f
 	const val INITIAL_ROTATION = 0f

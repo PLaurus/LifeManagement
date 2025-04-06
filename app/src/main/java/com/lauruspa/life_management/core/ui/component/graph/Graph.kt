@@ -770,16 +770,13 @@ fun <T> Graph(
 	val coroutineScope = rememberCoroutineScope()
 	
 	LaunchedEffect(state) {
-		
-		coroutineScope.launch {
-			state.updateCameraPosition {
-				if (initialCenteredItemIndex != null) {
+		if (initialCenteredItemIndex != null) {
+			coroutineScope.launch {
+				state.updateCameraPosition {
 					itemsCenter(
 						zoom = state.initialZoom,
 						itemIndexes = listOf(initialCenteredItemIndex)
 					)
-				} else {
-					itemsCenter(zoom = state.initialZoom)
 				}
 			}
 		}
@@ -1050,7 +1047,14 @@ fun <T> Graph(
 			}
 		}
 		
-		val graphOffset = -graphRect.topLeft
+		val containerSize = IntSize(
+			width = graphRect.width.coerceAtMost(constraints.maxWidth),
+			height = graphRect.height.coerceAtMost(constraints.maxHeight)
+		)
+		
+		val containerCenter = containerSize.center
+		
+		val graphOffset = containerCenter - graphRect.center
 		val linesComponentPosition = linksRect?.topLeft?.plus(graphOffset) ?: IntOffset.Zero
 		
 		val localLinks = if (linksRect != null) {
@@ -1104,11 +1108,6 @@ fun <T> Graph(
 				)
 			}
 		
-		val containerSize = IntSize(
-			width = offsetGraphRect.width.coerceAtMost(constraints.maxWidth),
-			height = offsetGraphRect.height.coerceAtMost(constraints.maxHeight)
-		)
-		
 		state.layoutInfo = GraphLayoutInfo(
 			itemRectList = items.map { item ->
 				offsetNodes
@@ -1124,7 +1123,7 @@ fun <T> Graph(
 					} ?: IntRect.Zero
 			},
 			containerSize = containerSize,
-			movableArea = graphRect,
+			movableArea = offsetGraphRect,
 			contentPaddingLeft = contentPaddingLeft,
 			contentPaddingTop = contentPaddingTop,
 			contentPaddingRight = contentPaddingRight,
