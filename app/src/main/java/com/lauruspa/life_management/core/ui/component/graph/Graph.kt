@@ -35,6 +35,7 @@ import androidx.compose.runtime.saveable.mapSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.lerp
@@ -87,7 +88,7 @@ data class GraphLayoutInfo(
 	val contentPaddingTop: Int,
 	val contentPaddingRight: Int,
 	val contentPaddingBottom: Int
-): Parcelable {
+) : Parcelable {
 	companion object {
 		@Stable
 		internal val Zero: GraphLayoutInfo
@@ -266,7 +267,7 @@ class GraphState internal constructor(
 	internal suspend fun onGestureStart() = coroutineScope {}
 	
 	internal suspend fun onGestureEnd(onBoundsCalculated: () -> Unit) {
-		if (fling && zoom > 1) {
+		if (fling && zoom > 0) {
 			fling {
 				// We get target value on start instead of updating bounds after
 				// gesture has finished
@@ -644,7 +645,7 @@ class GraphState internal constructor(
 		private fun calcItemsRect(
 			itemRectList: List<IntRect>
 		): IntRect {
-			return if(itemRectList.isNotEmpty()) {
+			return if (itemRectList.isNotEmpty()) {
 				IntRect(
 					left = itemRectList.minOf { itemRect -> itemRect.left },
 					top = itemRectList.minOf { itemRect -> itemRect.top },
@@ -759,12 +760,44 @@ fun <T> Graph(
 	),
 	sameColumnLinkPadding: Dp = 16.dp,
 	sameColumnLinkSideOnTheRight: (item1: T, item2: T) -> Boolean = { _, _ -> true },
+	debug: Boolean = false,
 	item: @Composable (item: T) -> Unit
 ) {
 	val coroutineScope = rememberCoroutineScope()
 	SubcomposeLayout(
 		modifier = modifier
 			.clipToBounds()
+			.run {
+				if (debug) {
+					drawBehind {
+						drawLine(
+							color = Color.Red,
+							start = Offset(
+								x = size.width / 2,
+								y = 0f
+							),
+							end = Offset(
+								x = size.width / 2,
+								y = size.height
+							)
+						)
+						
+						drawLine(
+							color = Color.Red,
+							start = Offset(
+								x = 0f,
+								y = size.height / 2
+							),
+							end = Offset(
+								x = size.width,
+								y = size.height / 2
+							)
+						)
+					}
+				} else {
+					this
+				}
+			}
 			.pointerInput(Unit) {
 				detectTransformGestures(
 					pass = PointerEventPass.Initial,
@@ -1038,14 +1071,26 @@ fun <T> Graph(
 				)
 			)
 		
+		val offsetGraphRect = graphRect.translate(graphOffset)
+		
+		val offsetNodes = nodes
+			.map { node ->
+				node.copy(
+					position = IntOffset(
+						x = node.position.x + graphOffset.x,
+						y = node.position.y + graphOffset.y
+					)
+				)
+			}
+		
 		val containerSize = IntSize(
-			width = graphRect.width.coerceAtMost(constraints.maxWidth),
-			height = graphRect.height.coerceAtMost(constraints.maxHeight)
+			width = offsetGraphRect.width.coerceAtMost(constraints.maxWidth),
+			height = offsetGraphRect.height.coerceAtMost(constraints.maxHeight)
 		)
 		
 		state.layoutInfo = GraphLayoutInfo(
 			itemRectList = items.map { item ->
-				nodes
+				offsetNodes
 					.firstOrNull { otherNode -> otherNode.item == item }
 					?.let { node ->
 						IntRect(
@@ -1067,10 +1112,10 @@ fun <T> Graph(
 		
 		layout(containerSize.width, containerSize.height) {
 			linesPlaceable.place(linesComponentPosition.x, linesComponentPosition.y)
-			nodes.forEach { node ->
+			offsetNodes.forEach { node ->
 				node.placeable.place(
-					x = node.position.x + graphOffset.x,
-					y = node.position.y + graphOffset.y
+					x = node.position.x,
+					y = node.position.y
 				)
 			}
 		}
@@ -1450,6 +1495,7 @@ private fun GraphPreview() {
 				val columnIndex = itemLevel(item1)
 				columnIndex < 0
 			},
+			debug = true
 		) { item ->
 			Card(
 				modifier = Modifier.width(100.dp),
@@ -1501,7 +1547,7 @@ private fun GraphPreview() {
 				onClick = {
 					coroutineScope.launch {
 						graphState.animateCameraPosition {
-							fitItems(itemIndexes = listOf(3))
+							fitItems(itemIndexes = listOf(4))
 						}
 					}
 				}
@@ -1512,7 +1558,7 @@ private fun GraphPreview() {
 				onClick = {
 					coroutineScope.launch {
 						graphState.animateCameraPosition {
-							fitItems(itemIndexes = listOf(55, 61, 57))
+							fitItems(itemIndexes = listOf(55, 61, 57), withPadding = false)
 						}
 					}
 				}
