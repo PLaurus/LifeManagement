@@ -1,4 +1,4 @@
-package com.lauruspa.life_management.core.ui
+package com.lauruspa.life_management.core.ui.utils
 
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.unit.IntOffset

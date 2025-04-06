@@ -1,4 +1,4 @@
-package com.lauruspa.life_management.core.ui
+package com.lauruspa.life_management.core.ui.utils
 
 import android.content.res.TypedArray
 import androidx.annotation.StyleableRes

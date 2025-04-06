@@ -24,8 +24,8 @@ import androidx.compose.ui.unit.center
 import androidx.compose.ui.unit.toOffset
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
-import com.lauruspa.life_management.core.ui.coerceIn
-import com.lauruspa.life_management.core.ui.toOffset
+import com.lauruspa.life_management.core.ui.utils.toOffset
+import com.lauruspa.life_management.core.ui.utils.coerceIn
 import kotlin.math.roundToInt
 
 @Stable
@@ -461,9 +461,9 @@ class HoneyCombsState internal constructor(
             val containerSize = layoutInfo.containerSize
             val itemsSize = layoutInfo.itemsRect.size
             val paddingLeft = layoutInfo.paddingLeft
-            val paddingTop = layoutInfo.paddingLeft
+            val paddingTop = layoutInfo.paddingTop
             val paddingRight = layoutInfo.paddingRight
-            val paddingBottom = layoutInfo.paddingRight
+            val paddingBottom = layoutInfo.paddingBottom
             val maxZoom = maxZoom
             val minZoom = minZoom
 

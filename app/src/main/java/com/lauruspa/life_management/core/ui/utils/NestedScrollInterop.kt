@@ -1,4 +1,4 @@
-package com.lauruspa.life_management.core.ui
+package com.lauruspa.life_management.core.ui.utils
 
 import android.view.ViewParent
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -55,9 +55,8 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.Velocity
 import androidx.core.view.doOnAttach
 import kotlinx.coroutines.launch
-import com.lauruspa.life_management.core.ui.utils.findParentViewByClassName
 
-@OptIn(ExperimentalFoundationApi::class, ExperimentalComposeUiApi::class)
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun NestedScrollInteropBox(
     modifier: Modifier = Modifier,

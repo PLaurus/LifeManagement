@@ -1,4 +1,4 @@
-package com.lauruspa.life_management.core.ui
+package com.lauruspa.life_management.core.ui.utils
 
 import androidx.compose.foundation.gestures.calculateCentroid
 import androidx.compose.foundation.gestures.calculateCentroidSize

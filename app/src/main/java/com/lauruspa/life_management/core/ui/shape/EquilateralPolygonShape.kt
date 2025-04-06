@@ -1,4 +1,4 @@
-package com.lauruspa.life_management.core.ui
+package com.lauruspa.life_management.core.ui.shape
 
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CornerSize
@@ -103,13 +103,13 @@ data class EquilateralPolygonShape(
 @Composable
 private fun TriangleShapePreview() {
     Surface(
-        modifier = Modifier.size(140.dp),
-        shape = EquilateralPolygonShape(
+	    modifier = Modifier.size(140.dp),
+	    shape = EquilateralPolygonShape(
             anglesCount = 3,
             cornerSize = CornerSize(16.dp)
         ),
-        color = Color(0xFFB84343),
-        content = {}
+	    color = Color(0xFFB84343),
+	    content = {}
     )
 }
 
@@ -117,13 +117,13 @@ private fun TriangleShapePreview() {
 @Composable
 private fun TetragonShapePreview() {
     Surface(
-        modifier = Modifier.size(140.dp),
-        shape = EquilateralPolygonShape(
+	    modifier = Modifier.size(140.dp),
+	    shape = EquilateralPolygonShape(
             anglesCount = 4,
             cornerSize = CornerSize(16.dp)
         ),
-        color = Color(0xFFB84343),
-        content = {}
+	    color = Color(0xFFB84343),
+	    content = {}
     )
 }
 
@@ -131,12 +131,12 @@ private fun TetragonShapePreview() {
 @Composable
 private fun HexagonShapePreview() {
     Surface(
-        modifier = Modifier.size(140.dp),
-        shape = EquilateralPolygonShape(
+	    modifier = Modifier.size(140.dp),
+	    shape = EquilateralPolygonShape(
             anglesCount = 6,
             cornerSize = CornerSize(16.dp)
         ),
-        color = Color(0xFFB84343),
-        content = {}
+	    color = Color(0xFFB84343),
+	    content = {}
     )
 }

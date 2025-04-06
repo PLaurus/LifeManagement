@@ -65,8 +65,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.toOffset
 import androidx.compose.ui.unit.toSize
 import com.lauruspa.life_management.R
-import com.lauruspa.life_management.core.ui.EquilateralPolygonShape
-import com.lauruspa.life_management.core.ui.detectTransformGestures
+import com.lauruspa.life_management.core.ui.shape.EquilateralPolygonShape
+import com.lauruspa.life_management.core.ui.utils.detectTransformGestures
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.ceil
