@@ -554,13 +554,17 @@ class GraphState internal constructor(
 			itemRectList: List<IntRect>,
 			zoom: Float
 		): GraphCameraPosition {
+			val containerSize = layoutInfo.containerSize
 			val itemsRect = calcItemsRect(itemRectList = itemRectList)
-			val itemsCenter = itemsRect.center.toOffset()
-			return calcNewCameraPosition(
-				centroid = itemsCenter,
-				panChange = Offset.Zero,
-				zoomChange = zoom / this@GraphState.zoom,
-				rotationChange = 0f
+			val maxZoom = maxZoom
+			val minZoom = minZoom
+			
+			val newZoom = zoom.coerceIn(minZoom, maxZoom)
+			
+			return GraphCameraPosition(
+				zoom = newZoom,
+				rotation = 0f,
+				pan = -(itemsRect.center.toOffset() * newZoom - containerSize.toOffset() / 2f)
 			)
 		}
 		
