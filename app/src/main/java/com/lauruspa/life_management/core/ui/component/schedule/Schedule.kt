@@ -5,21 +5,24 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredWidthIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
@@ -62,7 +65,7 @@ fun <T> Schedule(
 				.background(Color.Gray)
 		)
 	},
-	itemsPaddingVerticalDp: Dp = 29.dp,
+	itemsPaddingVerticalDp: Dp = 25.dp,
 	itemsVerticalSpacing: Dp = 8.dp,
 	nowDate: LocalDateTime? = null,
 	itemSlot: @Composable (T) -> Unit
@@ -72,16 +75,14 @@ fun <T> Schedule(
 	require(!columnDuration.isNegative && !columnDuration.isZero) { "columnDuration must be positive" }
 	
 	SubcomposeLayout(
-		modifier = modifier.background(backgroundColor)
+		modifier = modifier
+			.background(backgroundColor)
 			.horizontalScroll(rememberScrollState())
-			.verticalScroll(rememberScrollState())
 	) { constraints ->
-		// Преобразование единиц измерения из dp в пиксели
-		val itemsPaddingVerticalPx = itemsPaddingVerticalDp.roundToPx()
-		val itemsVerticalSpacingPx = itemsVerticalSpacing.roundToPx()
 		
 		// Расчет общей длительности расписания
-		val requiredScheduleDurationMs = Duration.between(dateFrom, dateTo).toMillis()
+		val requiredScheduleDurationMs = Duration.between(dateFrom, dateTo)
+			.toMillis()
 		val columnDurationMs = columnDuration.toMillis()
 		
 		// Вычисление количества столбцов для покрытия всей длительности
@@ -123,85 +124,36 @@ fun <T> Schedule(
 		val columnWidthPx = max(columnWidthByConstraints, maxColumnTitleWidthPx)
 		val scheduleWidthPx = columnWidthPx * columnsCount
 		
-		// Получение всех элементов из itemsByRows
-		val allItems = itemsByRows.flatten()
-		
-		// Ассоциация элементов с их диапазонами дат и длительностями
-		val itemToDateRange = allItems.associateWith { item -> itemDateRange(item) }
-		val itemToDurationMs = itemToDateRange.mapValues { (_, dateRange) ->
-			Duration.between(dateRange.dateFrom, dateRange.dateTo)
-				.toMillis()
-		}
-		
-		// Расчет ширины каждого элемента пропорционально его длительности
-		val itemToItemWidth = itemToDurationMs.mapValues { (_, itemDurationMs) ->
-			(itemDurationMs * scheduleWidthPx / scheduleDurationMs).toInt()
-		}
-		
-		// Измерение элементов расписания с фиксированной шириной
-		val itemPlaceables = subcompose(ScheduleSlot.ScheduleItems) {
-			allItems.forEach { item ->
-				itemSlot(item)
-			}
-		}.mapIndexed { index, measurable ->
-			val itemWidth = itemToItemWidth[allItems[index]] ?: 0
+		val scheduleItemsPlaceable = subcompose(ScheduleSlot.ScheduleItems) {
+			ScheduleItems(
+				dateFrom = dateFrom,
+				itemsByRows = itemsByRows,
+				itemDateRange = itemDateRange,
+				scheduleDurationMs = scheduleDurationMs,
+				itemsPaddingVerticalDp = itemsPaddingVerticalDp,
+				itemsVerticalSpacing = itemsVerticalSpacing,
+				modifier = Modifier.fillMaxSize(),
+				itemSlot = itemSlot
+			)
+		}.map { measurable ->
 			measurable.measure(
 				Constraints(
-					minWidth = itemWidth,
-					maxWidth = itemWidth
+					minWidth = scheduleWidthPx,
+					maxWidth = scheduleWidthPx,
+					minHeight = 0,
+					maxHeight = constraints.maxHeight - maxColumnTitleHeightPx
 				)
 			)
 		}
-		
-		// Группировка placeables по рядам
-		var index = 0
-		val placeablesByRows = itemsByRows.map { row ->
-			val rowPlaceables = itemPlaceables.subList(index, index + row.size)
-			index += row.size
-			rowPlaceables
-		}
-		
-		// Расчет высоты каждого ряда (максимальная высота элементов в ряду)
-		val rowHeights = placeablesByRows.map { rowPlaceables ->
-			rowPlaceables.maxOfOrNull { it.height } ?: 0
-		}
-		
-		// Расчет y-позиций для каждого ряда
-		var currentY = maxColumnTitleHeightPx + itemsPaddingVerticalPx
-		val rowYPositions = mutableListOf<Int>()
-		for (rowIndex in itemsByRows.indices) {
-			rowYPositions.add(currentY)
-			if (rowIndex < itemsByRows.size - 1) {
-				currentY += rowHeights[rowIndex] + itemsVerticalSpacingPx
-			}
-		}
+			.first()
 		
 		// Вычисление позиций x для столбцов
 		val columnXPositions = (0 until columnsCount).map { columnIndex -> columnIndex * columnWidthPx }
 		
-		// Расчет позиций для элементов расписания
-		val scheduleItems = placeablesByRows.flatMapIndexed { rowIndex, rowPlaceables ->
-			val y = rowYPositions[rowIndex]
-			rowPlaceables.mapIndexed { itemIndex, placeable ->
-				val item = itemsByRows[rowIndex][itemIndex]
-				val itemDateRangeValue = itemToDateRange[item]!!
-				val itemRelativeDateFromMs = Duration.between(dateFrom, itemDateRangeValue.dateFrom).toMillis()
-				val itemPosX = (itemRelativeDateFromMs * scheduleWidthPx / scheduleDurationMs).toInt()
-				PlaceableAndPosition(
-					placeable = placeable,
-					position = IntOffset(itemPosX, y)
-				)
-			}
-		}
-		
-		val itemsSlotHeight = rowHeights.sum() + itemsPaddingVerticalPx * 2 +
-				(rowHeights.size - 1).coerceAtLeast(0) * itemsVerticalSpacingPx
-		
 		// Определение общего размера содержимого расписания
 		val scheduleContentSize = IntSize(
 			width = scheduleWidthPx,
-			height = (maxColumnTitleHeightPx + itemsSlotHeight)
-				.coerceAtLeast(constraints.minHeight)
+			height = constraints.maxHeight
 		)
 		
 		// Измерение разделителей столбцов
@@ -232,9 +184,8 @@ fun <T> Schedule(
 				scheduleDurationMs = scheduleDurationMs
 			)
 			
-			val shimmerPosY = rowYPositions.first()
 			val shimmerWidth = abs(nowPosX)
-			val shimmerHeight = scheduleContentSize.height - shimmerPosY
+			val shimmerHeight = scheduleContentSize.height - maxColumnTitleHeightPx
 			
 			val timeBeforeNowShimmerPlaceable = subcompose(ScheduleSlot.TimeBeforeNowShimmer) {
 				Box(
@@ -257,7 +208,7 @@ fun <T> Schedule(
 				placeable = timeBeforeNowShimmerPlaceable,
 				position = IntOffset(
 					x = nowPosX - shimmerWidth,
-					y = shimmerPosY
+					y = maxColumnTitleHeightPx
 				)
 			)
 			
@@ -295,7 +246,8 @@ fun <T> Schedule(
 						maxHeight = nowIndicatorHeight
 					)
 				)
-			}.first()
+			}
+				.first()
 			
 			nowIndicatorPAP = PlaceableAndPosition(
 				placeable = nowIndicatorPlaceable,
@@ -309,7 +261,6 @@ fun <T> Schedule(
 			nowIndicatorPAP = null
 		}
 		
-		// Размещение всех компонентов в макете
 		layout(scheduleContentSize.width, scheduleContentSize.height) {
 			// Размещение заголовков столбцов
 			columnTitlePlaceables.forEachIndexed { index, placeable ->
@@ -332,10 +283,10 @@ fun <T> Schedule(
 				)
 			}
 			
-			// Размещение элементов расписания
-			scheduleItems.forEach { scheduleItem ->
-				scheduleItem.placeable.place(scheduleItem.position)
-			}
+			scheduleItemsPlaceable.place(
+				x = 0,
+				y = maxColumnTitleHeightPx
+			)
 			
 			// Размещение эффекта затемнения до текущего времени
 			timeBeforeNowPAP?.placeable?.place(timeBeforeNowPAP.position)
@@ -346,13 +297,122 @@ fun <T> Schedule(
 	}
 }
 
+@Composable
+private fun <T> ScheduleItems(
+	dateFrom: LocalDateTime,
+	itemsByRows: List<List<T>>,
+	itemDateRange: (T) -> DateRange,
+	scheduleDurationMs: Long,
+	itemsPaddingVerticalDp: Dp,
+	itemsVerticalSpacing: Dp,
+	modifier: Modifier = Modifier,
+	itemSlot: @Composable (T) -> Unit
+) {
+	SubcomposeLayout(
+		modifier = modifier
+			.verticalScroll(rememberScrollState())
+	) { constraints ->
+		val scheduleWidthPx = constraints.minWidth
+		// Преобразование единиц измерения из dp в пиксели
+		val itemsPaddingVerticalPx = itemsPaddingVerticalDp.roundToPx()
+		val itemsVerticalSpacingPx = itemsVerticalSpacing.roundToPx()
+		
+		// Получение всех элементов из itemsByRows
+		val allItems = itemsByRows.flatten()
+		
+		// Ассоциация элементов с их диапазонами дат и длительностями
+		val itemToDateRange = allItems.associateWith { item -> itemDateRange(item) }
+		
+		val itemToDurationMs = itemToDateRange.mapValues { (_, dateRange) ->
+			Duration.between(dateRange.dateFrom, dateRange.dateTo)
+				.toMillis()
+		}
+		
+		// Расчет ширины каждого элемента пропорционально его длительности
+		val itemToItemWidth = itemToDurationMs.mapValues { (_, itemDurationMs) ->
+			(itemDurationMs * scheduleWidthPx / scheduleDurationMs).toInt()
+		}
+		
+		// Измерение элементов расписания с фиксированной шириной
+		val itemPlaceables = subcompose(null) {
+			allItems.forEach { item ->
+				itemSlot(item)
+			}
+		}.mapIndexed { index, measurable ->
+			val itemWidth = itemToItemWidth[allItems[index]] ?: 0
+			measurable.measure(
+				Constraints(
+					minWidth = itemWidth,
+					maxWidth = itemWidth
+				)
+			)
+		}
+		
+		// Группировка placeables по рядам
+		var index = 0
+		val placeablesByRows = itemsByRows.map { row ->
+			val rowPlaceables = itemPlaceables.subList(index, index + row.size)
+			index += row.size
+			rowPlaceables
+		}
+		
+		// Расчет высоты каждого ряда (максимальная высота элементов в ряду)
+		val rowHeights = placeablesByRows.map { rowPlaceables ->
+			rowPlaceables.maxOfOrNull { it.height } ?: 0
+		}
+		
+		// Расчет y-позиций для каждого ряда
+		var currentY = itemsPaddingVerticalPx
+		val rowYPositions = mutableListOf<Int>()
+		for (rowIndex in itemsByRows.indices) {
+			rowYPositions.add(currentY)
+			if (rowIndex < itemsByRows.size - 1) {
+				currentY += rowHeights[rowIndex] + itemsVerticalSpacingPx
+			}
+		}
+		
+		// Расчет позиций для элементов расписания
+		val scheduleItems = placeablesByRows.flatMapIndexed { rowIndex, rowPlaceables ->
+			val y = rowYPositions[rowIndex]
+			rowPlaceables.mapIndexed { itemIndex, placeable ->
+				val item = itemsByRows[rowIndex][itemIndex]
+				val itemDateRangeValue = itemToDateRange[item]!!
+				val itemRelativeDateFromMs = Duration.between(dateFrom, itemDateRangeValue.dateFrom)
+					.toMillis()
+				val itemPosX = (itemRelativeDateFromMs * scheduleWidthPx / scheduleDurationMs).toInt()
+				PlaceableAndPosition(
+					placeable = placeable,
+					position = IntOffset(itemPosX, y)
+				)
+			}
+		}
+		
+		val scheduleHeightPx = rowHeights.sum() + itemsPaddingVerticalPx * 2 +
+				(rowHeights.size - 1).coerceAtLeast(0) * itemsVerticalSpacingPx
+		
+		layout(
+			width = scheduleWidthPx.coerceIn(
+				minimumValue = constraints.minWidth,
+				maximumValue = constraints.maxWidth
+			),
+			height = scheduleHeightPx.coerceAtLeast(constraints.minHeight)
+		) {
+			// Размещение элементов расписания
+			scheduleItems.forEach { scheduleItem ->
+				scheduleItem.placeable.place(scheduleItem.position)
+			}
+		}
+	}
+}
+
 private fun calcDatePosX(
 	date: LocalDateTime,
 	dateFrom: LocalDateTime,
 	scheduleWidthPx: Int,
 	scheduleDurationMs: Long
 ): Int {
-	val itemRelativeDateFromMs = Duration.between(dateFrom, date).toMillis()
+	val itemRelativeDateFromMs = Duration.between(dateFrom, date)
+		.toMillis()
 	return (itemRelativeDateFromMs * scheduleWidthPx / scheduleDurationMs).toInt()
 }
 
@@ -405,7 +465,7 @@ private fun SchedulePreview() {
 			when (item) {
 				0 -> DateRange(
 					dateFrom = dateFrom.plusHours(0),
-					dateTo = dateFrom.plusHours(6)
+					dateTo = dateFrom.plusMinutes(30)
 				)
 				
 				1 -> DateRange(
@@ -429,7 +489,7 @@ private fun SchedulePreview() {
 				)
 				
 				6 -> DateRange(
-					dateFrom = dateFrom.plusHours(10),
+					dateFrom = dateFrom.plusHours(11),
 					dateTo = dateFrom.plusHours(16)
 				)
 				
@@ -455,7 +515,7 @@ private fun SchedulePreview() {
 			
 			Column(
 				horizontalAlignment = Alignment.CenterHorizontally,
-				modifier = Modifier.padding(start = 16.dp, top = 4.dp, end = 16.dp)
+				modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
 			) {
 				Text(
 					text = formattedDateFrom,
@@ -478,26 +538,45 @@ private fun SchedulePreview() {
 		modifier = Modifier.fillMaxSize(),
 		nowDate = remember(dateFrom) { dateFrom.plusHours(9) }
 	) { item ->
-		Card(
-			modifier = Modifier.fillMaxWidth(),
-			shape = RoundedCornerShape(2.dp),
-			colors = CardDefaults.cardColors(
-				containerColor = when (item % 4) {
-					0 -> Color.Yellow
-					1 -> Color.Red
-					2 -> Color.Green
-					else -> Color.Magenta
+		val shape = RoundedCornerShape(2.dp)
+		val color = remember(item) {
+			when (item % 4) {
+				0 -> Color.Yellow
+				1 -> Color.Red
+				2 -> Color.Green
+				else -> Color.Magenta
+			}
+		}
+		
+		Row(
+			modifier = Modifier
+				.fillMaxWidth()
+				.clip(shape)
+				.background(color = color)
+				.drawWithContent {
+					val strokeWidthPx = 2.dp.toPx()
+					drawContent()
+					drawLine(
+						color = Color.Black.copy(alpha = 0.25f),
+						start = Offset(strokeWidthPx / 2, 0f),
+						end = Offset(strokeWidthPx / 2, size.height),
+						strokeWidth = strokeWidthPx
+					)
 				}
-			)
+				.horizontalScroll(rememberScrollState(), false),
 		) {
 			Text(
-				text = "Item $item",
-				modifier = Modifier.padding(start = 10.dp, top = 6.dp, bottom = 6.dp),
+				text = when (item) {
+					1 -> "Item 0\n".repeat(2)
+					else -> "Item $item"
+				},
+				modifier = Modifier
+					.padding(start = 10.dp, top = 6.dp, bottom = 6.dp)
+					.requiredWidthIn(max = Dp.Infinity),
 				fontWeight = FontWeight.W500,
 				fontSize = 14.sp,
 				lineHeight = 20.sp,
 				color = Color.Black,
-				maxLines = 1
 			)
 		}
 	}
