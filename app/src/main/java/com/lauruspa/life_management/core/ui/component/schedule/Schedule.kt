@@ -37,10 +37,8 @@ import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.Month
 import java.time.format.DateTimeFormatter
-import java.time.temporal.ChronoUnit
 import kotlin.math.abs
 import kotlin.math.max
-import kotlin.math.roundToInt
 
 @Composable
 fun <T> Schedule(
@@ -59,7 +57,6 @@ fun <T> Schedule(
 				.fillMaxHeight()
 				.width(1.dp)
 				.background(Color.Gray)
-		
 		)
 	},
 	itemsPaddingVerticalDp: Dp = 29.dp,
@@ -67,19 +64,23 @@ fun <T> Schedule(
 	nowDate: LocalDateTime? = null,
 	itemSlot: @Composable (T) -> Unit
 ) {
+	// Валидация входных параметров
+	require(dateTo.isAfter(dateFrom)) { "dateTo must be after dateFrom" }
+	require(!columnDuration.isNegative && !columnDuration.isZero) { "columnDuration must be positive" }
+	
 	SubcomposeLayout(
-		modifier = modifier
-			.background(backgroundColor)
+		modifier = modifier.background(backgroundColor)
 	) { constraints ->
-		val itemsPaddingVerticalPx = itemsPaddingVerticalDp.toPx()
-			.roundToInt()
-		val itemsVerticalSpacingPx = itemsVerticalSpacing.toPx()
-			.roundToInt()
+		// Преобразование единиц измерения из dp в пиксели
+		val itemsPaddingVerticalPx = itemsPaddingVerticalDp.roundToPx()
+		val itemsVerticalSpacingPx = itemsVerticalSpacing.roundToPx()
 		
-		val requiredScheduleDuration = Duration.between(dateFrom, dateTo)
-		val requiredScheduleDurationMs = requiredScheduleDuration.toMillis()
-		
+		// Расчет общей длительности расписания
+		val requiredScheduleDurationMs = Duration.between(dateFrom, dateTo)
+			.toMillis()
 		val columnDurationMs = columnDuration.toMillis()
+		
+		// Вычисление количества столбцов для покрытия всей длительности
 		val wholeColumnsCount = requiredScheduleDurationMs / columnDurationMs
 		val columnsCount = if (requiredScheduleDurationMs % columnDurationMs != 0L) {
 			if (wholeColumnsCount >= 0) {
@@ -90,68 +91,57 @@ fun <T> Schedule(
 		} else {
 			wholeColumnsCount
 		}.toInt()
-		
 		val scheduleDurationMs = columnsCount * columnDurationMs
 		
+		// Создание диапазонов дат для каждого столбца
 		val columnDateRanges = List(columnsCount) { column ->
-			val columnDateFrom = dateFrom.plus(
-				column * columnDurationMs,
-				ChronoUnit.MILLIS
-			)
-			
+			val columnDateFrom = dateFrom.plus(Duration.ofMillis(column * columnDurationMs))
 			DateRange(
 				dateFrom = columnDateFrom,
-				dateTo = columnDateFrom.plus(columnDurationMs, ChronoUnit.MILLIS)
+				dateTo = columnDateFrom.plus(Duration.ofMillis(columnDurationMs))
 			)
 		}
 		
+		// Измерение заголовков столбцов
 		val columnTitlePlaceables = subcompose(ScheduleSlot.ColumnTitles) {
 			columnDateRanges.forEach { dateRange ->
 				columnTitle(dateRange.dateFrom, dateRange.dateTo)
 			}
-		}.map { measurable ->
-			measurable.measure(Constraints())
-		}
+		}.map { measurable -> measurable.measure(Constraints()) }
 		
-		val itemToDateRange = items.associateWith { item ->
-			itemDateRange(item)
-		}
+		// Определение максимальной ширины и высоты заголовков столбцов
+		val maxColumnTitleWidthPx = columnTitlePlaceables.maxOfOrNull { it.width } ?: 0
+		val maxColumnTitleHeightPx = columnTitlePlaceables.maxOfOrNull { it.height } ?: 0
 		
-		val itemToDurationMs = itemToDateRange.mapValues { (_, dateRange) ->
-			Duration.between(dateRange.dateFrom, dateRange.dateTo)
-				.toMillis()
-		}
-		
+		// Расчет ширины каждого столбца с учетом ограничений и заголовков
 		val columnWidthByConstraints = if (constraints.hasBoundedWidth) {
 			constraints.maxWidth / columnsCount
 		} else {
 			constraints.minWidth / columnsCount
 		}
-		
-		val maxColumnTitleWidthPx = columnTitlePlaceables
-			.maxOfOrNull { columnTitlePlaceable ->
-				columnTitlePlaceable.width
-			} ?: 0
-		
-		val maxColumnTitleHeightPx = columnTitlePlaceables
-			.maxOfOrNull { columnTitlePlaceable ->
-				columnTitlePlaceable.height
-			} ?: 0
-		
 		val columnWidthPx = max(columnWidthByConstraints, maxColumnTitleWidthPx)
 		val scheduleWidthPx = columnWidthPx * columnsCount
 		
+		// Ассоциация элементов с их диапазонами дат и длительностями
+		val itemToDateRange = items.associateWith { item -> itemDateRange(item) }
+		val itemToDurationMs = itemToDateRange.mapValues { (_, dateRange) ->
+			Duration.between(dateRange.dateFrom, dateRange.dateTo)
+				.toMillis()
+		}
+		
+		// Расчет ширины каждого элемента пропорционально его длительности
 		val itemToItemWidth = itemToDurationMs.mapValues { (_, itemDurationMs) ->
 			// itemDurationMs / durationMs = itemWidth / scheduleWidthPx
 			(itemDurationMs * scheduleWidthPx / scheduleDurationMs).toInt()
 		}
 		
+		// Измерение элементов расписания с фиксированной шириной
 		val itemPlaceables = subcompose(ScheduleSlot.ScheduleItems) {
 			items.forEach { item ->
 				itemSlot(item)
 			}
 		}.mapIndexed { index, measurable ->
-			val itemWidth = itemToItemWidth[items.elementAt(index)] ?: 0
+			val itemWidth = itemToItemWidth[items[index]] ?: 0
 			measurable.measure(
 				Constraints(
 					minWidth = itemWidth,
@@ -160,32 +150,23 @@ fun <T> Schedule(
 			)
 		}
 		
-		val columnXPositions = (0 until columnsCount)
-			.map { columnIndex ->
-				columnIndex * columnWidthPx
-			}
+		// Вычисление позиций x для столбцов
+		val columnXPositions = (0 until columnsCount).map { columnIndex -> columnIndex * columnWidthPx }
 		
-		val columnTitleXPositions = columnTitlePlaceables
-			.mapIndexed { index, placeable ->
-				val localPosX = columnTitleAlignment.align(
-					size = placeable.width,
-					space = columnWidthPx,
-					layoutDirection = layoutDirection
-				)
-				
-				columnXPositions[index] + localPosX
-			}
-		
-		val itemToItemPosX = itemToDateRange.mapValues { (_, dateRange) ->
-			// itemDateFromMs / durationMs = itemX / scheduleWidthPx
-			val itemRelativeDateFromMs = Duration.between(dateFrom, dateRange.dateFrom)
-				.toMillis()
-			(itemRelativeDateFromMs * scheduleWidthPx / requiredScheduleDurationMs).toInt()
+		// Вычисление позиций x для заголовков столбцов с учетом выравнивания
+		val columnTitleXPositions = columnTitlePlaceables.mapIndexed { index, placeable ->
+			val localPosX = columnTitleAlignment.align(
+				size = placeable.width,
+				space = columnWidthPx,
+				layoutDirection = layoutDirection
+			)
+			columnXPositions[index] + localPosX
 		}
 		
+		// Размещение элементов вертикально с учетом отступов и интервалов
 		var scheduleItemPosY = maxColumnTitleHeightPx + itemsPaddingVerticalPx
 		val scheduleItems = itemPlaceables.mapIndexed { index, itemPlaceable ->
-			val item = items.elementAt(index)
+			val item = items[index]
 			val itemPlaceableDateRange = itemDateRange(item)
 			val itemRelativeDateFromMs = Duration.between(
 				dateFrom,
@@ -202,22 +183,20 @@ fun <T> Schedule(
 					y = scheduleItemPosY
 				)
 			)
-			
 			scheduleItemPosY += itemPlaceable.height + itemsVerticalSpacingPx
-			
 			scheduleItem
 		}
 		
+		// Определение общего размера содержимого расписания
 		val scheduleContentSize = IntSize(
 			width = scheduleWidthPx,
 			height = scheduleItems
-				.maxOf { scheduleItem ->
-					scheduleItem.position.y + scheduleItem.placeable.height
-				}
-				.plus(itemsPaddingVerticalPx)
-				.coerceAtLeast(constraints.minHeight)
+				.maxOfOrNull { scheduleItem -> scheduleItem.position.y + scheduleItem.placeable.height }
+				?.plus(itemsPaddingVerticalPx)
+				?.coerceAtLeast(constraints.minHeight) ?: constraints.minHeight
 		)
 		
+		// Измерение разделителей столбцов
 		val columnDividersCount = (columnsCount - 1).coerceAtLeast(0)
 		val columnDividerPlaceables = subcompose(ScheduleSlot.ColumnDividers) {
 			repeat(columnDividersCount) {
@@ -234,6 +213,7 @@ fun <T> Schedule(
 			)
 		}
 		
+		// Обработка индикатора текущего времени и эффекта затемнения, если nowDate задан
 		val timeBeforeNowPAP: PlaceableAndPosition?
 		val nowIndicatorPAP: PlaceableAndPosition?
 		if (nowDate != null) {
@@ -291,7 +271,6 @@ fun <T> Schedule(
 						radius = nowIndicatorRadiusPx,
 						center = center.copy(y = nowIndicatorRadiusPx)
 					)
-					
 					drawLine(
 						color = indicatorColor,
 						start = center.copy(y = nowIndicatorRadiusPx),
@@ -327,8 +306,9 @@ fun <T> Schedule(
 			nowIndicatorPAP = null
 		}
 		
+		// Размещение всех компонентов в макете
 		layout(scheduleContentSize.width, scheduleContentSize.height) {
-			
+			// Размещение заголовков столбцов
 			columnTitlePlaceables.forEachIndexed { index, placeable ->
 				placeable.place(
 					x = columnTitleXPositions[index],
@@ -336,6 +316,7 @@ fun <T> Schedule(
 				)
 			}
 			
+			// Размещение разделителей столбцов
 			columnDividerPlaceables.forEachIndexed { index, placeable ->
 				placeable.place(
 					x = columnXPositions[index + 1] - placeable.width / 2,
@@ -343,23 +324,16 @@ fun <T> Schedule(
 				)
 			}
 			
-			var y = maxColumnTitleHeightPx + itemsPaddingVerticalPx
-			itemPlaceables.forEachIndexed { index, itemPlaceable ->
-				itemPlaceable.place(
-					x = itemToItemPosX[items.elementAt(index)] ?: 0,
-					y = y
-				)
-				
-				y += itemPlaceable.height + itemsVerticalSpacingPx
+			// Размещение элементов расписания с использованием предварительно рассчитанных позиций
+			scheduleItems.forEach { scheduleItem ->
+				scheduleItem.placeable.place(scheduleItem.position)
 			}
 			
-			timeBeforeNowPAP?.placeable?.place(
-				timeBeforeNowPAP.position
-			)
+			// Размещение эффекта затемнения до текущего времени
+			timeBeforeNowPAP?.placeable?.place(timeBeforeNowPAP.position)
 			
-			nowIndicatorPAP?.placeable?.place(
-				nowIndicatorPAP.position
-			)
+			// Размещение индикатора текущего времени
+			nowIndicatorPAP?.placeable?.place(nowIndicatorPAP.position)
 		}
 	}
 }
@@ -398,31 +372,15 @@ private enum class ScheduleSlot {
 private fun SchedulePreview() {
 	val dateFrom = remember {
 		LocalDateTime.of(
-			LocalDate.of(
-				2025,
-				Month.AUGUST,
-				19
-			),
-			LocalTime.of(
-				0,
-				0,
-				0
-			)
+			LocalDate.of(2025, Month.AUGUST, 19),
+			LocalTime.of(0, 0, 0)
 		)
 	}
 	
 	val dateTo = remember {
 		LocalDateTime.of(
-			LocalDate.of(
-				2025,
-				Month.AUGUST,
-				20
-			),
-			LocalTime.of(
-				0,
-				0,
-				0
-			)
+			LocalDate.of(2025, Month.AUGUST, 20),
+			LocalTime.of(0, 0, 0)
 		)
 	}
 	
@@ -465,25 +423,17 @@ private fun SchedulePreview() {
 			}
 		},
 		columnTitle = { columnDateFrom: LocalDateTime, columnDateTo: LocalDateTime ->
-			val formatter = remember {
-				DateTimeFormatter.ofPattern("HH:mm")
-			}
-			
+			val formatter = remember { DateTimeFormatter.ofPattern("HH:mm") }
 			val formattedDateFrom = remember(columnDateFrom, formatter) {
 				columnDateFrom.format(formatter)
 			}
-			
 			val formattedDateTo = remember(columnDateTo, formatter) {
 				columnDateTo.format(formatter)
 			}
 			
 			Column(
 				horizontalAlignment = Alignment.CenterHorizontally,
-				modifier = Modifier.padding(
-					start = 16.dp,
-					top = 4.dp,
-					end = 16.dp
-				)
+				modifier = Modifier.padding(start = 16.dp, top = 4.dp, end = 16.dp)
 			) {
 				Text(
 					text = formattedDateFrom,
@@ -493,7 +443,6 @@ private fun SchedulePreview() {
 					textAlign = TextAlign.Center,
 					color = Color.Gray
 				)
-				
 				Text(
 					text = formattedDateTo,
 					fontWeight = FontWeight.W400,
@@ -505,9 +454,7 @@ private fun SchedulePreview() {
 			}
 		},
 		modifier = Modifier.fillMaxSize(),
-		nowDate = remember(dateFrom) {
-			dateFrom.plusHours(9)
-		}
+		nowDate = remember(dateFrom) { dateFrom.plusHours(9) }
 	) { item ->
 		Card(
 			modifier = Modifier.fillMaxWidth(),
@@ -523,11 +470,7 @@ private fun SchedulePreview() {
 		) {
 			Text(
 				text = item.toString(),
-				modifier = Modifier.padding(
-					start = 10.dp,
-					top = 6.dp,
-					bottom = 6.dp
-				),
+				modifier = Modifier.padding(start = 10.dp, top = 6.dp, bottom = 6.dp),
 				fontWeight = FontWeight.W500,
 				fontSize = 14.sp,
 				lineHeight = 20.sp,
