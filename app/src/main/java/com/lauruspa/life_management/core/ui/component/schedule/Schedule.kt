@@ -2,6 +2,7 @@ package com.lauruspa.life_management.core.ui.component.schedule
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -9,7 +10,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Text
@@ -70,6 +73,8 @@ fun <T> Schedule(
 	
 	SubcomposeLayout(
 		modifier = modifier.background(backgroundColor)
+			.horizontalScroll(rememberScrollState())
+			.verticalScroll(rememberScrollState())
 	) { constraints ->
 		// Преобразование единиц измерения из dp в пиксели
 		val itemsPaddingVerticalPx = itemsPaddingVerticalDp.roundToPx()
@@ -387,18 +392,15 @@ private fun SchedulePreview() {
 	}
 	
 	Schedule(
-		itemsByRows = listOf(
-			listOf(0, 1, 2),
-			listOf(3),
-			listOf(4),
-			listOf(5),
-			listOf(6),
-			listOf(7),
-			listOf(8)
-		),
+		itemsByRows = buildList {
+			add(listOf(0, 1, 2))
+			for (i in 3..50) {
+				add(listOf(i))
+			}
+		},
 		dateFrom = dateFrom,
 		dateTo = dateTo,
-		columnDuration = Duration.ofHours(10),
+		columnDuration = Duration.ofHours(2),
 		itemDateRange = { item ->
 			when (item) {
 				0 -> DateRange(
