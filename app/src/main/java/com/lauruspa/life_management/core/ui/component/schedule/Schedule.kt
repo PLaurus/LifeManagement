@@ -2,6 +2,7 @@ package com.lauruspa.life_management.core.ui.component.schedule
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,6 +27,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.Placeable
 import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.text.font.FontWeight
@@ -74,10 +76,20 @@ fun <T> Schedule(
 	require(dateTo.isAfter(dateFrom)) { "dateTo must be after dateFrom" }
 	require(!columnDuration.isNegative && !columnDuration.isZero) { "columnDuration must be positive" }
 	
+	val horizontalScrollState = rememberScrollState()
+	val verticalScrollState = rememberScrollState()
+	
 	SubcomposeLayout(
 		modifier = modifier
 			.background(backgroundColor)
-			.horizontalScroll(rememberScrollState())
+			.pointerInput(Unit) {
+				detectDragGestures { change, dragAmount ->
+					change.consume()
+					val (dx, _) = dragAmount
+					horizontalScrollState.dispatchRawDelta(-dx)
+				}
+			}
+			.horizontalScroll(horizontalScrollState, enabled = false)
 	) { constraints ->
 		
 		// Расчет общей длительности расписания
@@ -132,7 +144,17 @@ fun <T> Schedule(
 				scheduleDurationMs = scheduleDurationMs,
 				itemsPaddingVerticalDp = itemsPaddingVerticalDp,
 				itemsVerticalSpacing = itemsVerticalSpacing,
-				modifier = Modifier.fillMaxSize(),
+				modifier = Modifier
+					.fillMaxSize()
+					.pointerInput(Unit) {
+						detectDragGestures { change, dragAmount ->
+							change.consume()
+							val (dx, dy) = dragAmount
+							horizontalScrollState.dispatchRawDelta(-dx)
+							verticalScrollState.dispatchRawDelta(-dy)
+						}
+					}
+					.verticalScroll(verticalScrollState, enabled = false),
 				itemSlot = itemSlot
 			)
 		}.map { measurable ->
@@ -202,7 +224,8 @@ fun <T> Schedule(
 						maxHeight = shimmerHeight
 					)
 				)
-			}.first()
+			}
+				.first()
 			
 			timeBeforeNowPAP = PlaceableAndPosition(
 				placeable = timeBeforeNowShimmerPlaceable,
@@ -310,7 +333,6 @@ private fun <T> ScheduleItems(
 ) {
 	SubcomposeLayout(
 		modifier = modifier
-			.verticalScroll(rememberScrollState())
 	) { constraints ->
 		val scheduleWidthPx = constraints.minWidth
 		// Преобразование единиц измерения из dp в пиксели
