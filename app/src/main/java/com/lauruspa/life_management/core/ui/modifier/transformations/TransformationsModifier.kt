@@ -277,28 +277,10 @@ private class ZoomableNode(
 		measurable: Measurable,
 		constraints: Constraints,
 	): MeasureResult {
-		
-		val childConstraints = constraints.copy(
-			maxWidth = Constraints.Infinity,
-			maxHeight = Constraints.Infinity
-		)
-		
-		val placeable = measurable.measure(childConstraints)
-		
-		val contentSize = IntSize(
-			width = placeable.width,
-			height = placeable.height
-		)
-		
-		val viewportSize = IntSize(
-			width = contentSize.width.coerceAtMost(constraints.maxWidth),
-			height = contentSize.height.coerceAtMost(constraints.maxHeight)
-		)
-		
-		measuredSize = viewportSize.toSize()
+		val placeable = measurable.measure(constraints)
+		measuredSize = IntSize(placeable.measuredWidth, placeable.measuredHeight).toSize()
 		zoomState.setLayoutSize(measuredSize)
-		zoomState.setContentSize(contentSize.toSize())
-		return layout(viewportSize.width, viewportSize.height) {
+		return layout(placeable.width, placeable.height) {
 			placeable.placeWithLayer(x = 0, y = 0) {
 				scaleX = zoomState.scale
 				scaleY = zoomState.scale
