@@ -1,55 +1,73 @@
 package com.lauruspa.life_management.core.ui.component.schedule
 
+import androidx.compose.foundation.ScrollState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import java.time.Duration
 import java.time.LocalDateTime
 import java.time.temporal.ChronoUnit
 
 @Stable
-class ScheduleState {
+class ScheduleState(
+	internal val horizontalScrollState: ScrollState
+) {
 	
-	private var dateFrom: LocalDateTime? = null
-	private var scheduleWidthPx: Int = 0
-	private var scheduleDurationMs: Long = 0
-	private var horizontalOffsetPx: Int = 0
-	private var firstVisibleDateState by mutableStateOf<LocalDateTime?>(null)
+	private var layoutInfo by mutableStateOf<LayoutInfo?>(null)
 	
-	val firstVisibleDate
-		get() = firstVisibleDateState
-	
-	internal fun updateHorizontalOffsetPx(offsetPx: Int) {
-		horizontalOffsetPx = offsetPx
-		updateFirstVisibleDate()
+	val firstVisibleDate by derivedStateOf {
+		calcFirstVisibleDate(
+			layoutInfo = layoutInfo,
+			horizontalOffsetX = horizontalScrollState.value
+		)
 	}
 	
-	internal fun updateMeasuredValues(
-		dateFrom: LocalDateTime,
-		scheduleWidthPx: Int,
-		scheduleDurationMs: Long,
+	internal fun updateLayoutInfo(
+		layoutInfo: LayoutInfo
 	) {
-		this.dateFrom = dateFrom
-		this.scheduleWidthPx = scheduleWidthPx
-		this.scheduleDurationMs = scheduleDurationMs
-		updateFirstVisibleDate()
+		this.layoutInfo = layoutInfo
 	}
 	
-	private fun updateFirstVisibleDate() {
-		firstVisibleDateState = calcFirstVisibleDate()
+	private fun calcFirstVisibleDate(
+		layoutInfo: LayoutInfo?,
+		horizontalOffsetX: Int
+	): LocalDateTime? {
+		layoutInfo ?: return null
+		val scheduleWidthPx = layoutInfo.scheduleWidthPx.takeIf { it > 0 } ?: return layoutInfo.dateFrom
+		val firstVisibleDateOffsetMs = (horizontalOffsetX * layoutInfo.scheduleDurationMs) / scheduleWidthPx
+		return layoutInfo.dateFrom.plus(firstVisibleDateOffsetMs, ChronoUnit.MILLIS)
 	}
 	
-	private fun calcFirstVisibleDate(): LocalDateTime? {
-		val dateFrom = dateFrom ?: return null
-		val scheduleWidthPx = scheduleWidthPx.takeIf { it > 0 } ?: return dateFrom
-		val firstVisibleDateOffsetMs = (horizontalOffsetPx * scheduleDurationMs / scheduleWidthPx)
-		return dateFrom.plus(firstVisibleDateOffsetMs, ChronoUnit.MILLIS)
+	suspend fun animateScrollToDate(
+		date: LocalDateTime
+	) {
+		val layoutInfo = this.layoutInfo ?: return
+		val scheduleDurationMs = layoutInfo.scheduleDurationMs.takeIf { it > 0 } ?: return
+		val relDateMs = Duration.between(layoutInfo.dateFrom, date)
+			.toMillis()
+		val dateX = (relDateMs * layoutInfo.scheduleWidthPx) / scheduleDurationMs
+		horizontalScrollState.animateScrollTo(dateX.toInt())
 	}
+	
+	internal data class LayoutInfo(
+		val dateFrom: LocalDateTime,
+		val scheduleWidthPx: Int,
+		val scheduleDurationMs: Long,
+	)
 }
 
 @Composable
-fun rememberScheduleState(): ScheduleState {
-	return remember { ScheduleState() }
+fun rememberScheduleState(
+	horizontalScrollState: ScrollState = rememberScrollState()
+): ScheduleState {
+	return remember(horizontalScrollState) {
+		ScheduleState(
+			horizontalScrollState = horizontalScrollState
+		)
+	}
 }

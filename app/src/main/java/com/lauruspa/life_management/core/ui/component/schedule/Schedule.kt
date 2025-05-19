@@ -2,6 +2,7 @@ package com.lauruspa.life_management.core.ui.component.schedule
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,6 +22,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -44,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -83,20 +86,12 @@ fun <T> Schedule(
 	require(dateTo.isAfter(dateFrom)) { "dateTo must be after dateFrom" }
 	require(!columnDuration.isNegative && !columnDuration.isZero) { "columnDuration must be positive" }
 	
-	val horizontalScrollState = rememberScrollState()
 	val verticalScrollState = rememberScrollState()
-	
-	LaunchedEffect(horizontalScrollState, state) {
-		snapshotFlow { horizontalScrollState.value }
-			.collect { offsetPx ->
-				state.updateHorizontalOffsetPx(offsetPx)
-			}
-	}
 	
 	SubcomposeLayout(
 		modifier = modifier
 			.background(backgroundColor)
-			.horizontalScroll(horizontalScrollState)
+			.horizontalScroll(state.horizontalScrollState)
 	) { constraints ->
 		
 		// Расчет общей длительности расписания
@@ -283,10 +278,12 @@ fun <T> Schedule(
 			nowIndicatorPAP = null
 		}
 		
-		state.updateMeasuredValues(
-			dateFrom = dateFrom,
-			scheduleWidthPx = scheduleWidthPx,
-			scheduleDurationMs = scheduleDurationMs
+		state.updateLayoutInfo(
+			layoutInfo = ScheduleState.LayoutInfo(
+				dateFrom = dateFrom,
+				scheduleWidthPx = scheduleWidthPx,
+				scheduleDurationMs = scheduleDurationMs
+			)
 		)
 		
 		layout(scheduleContentSize.width, scheduleContentSize.height) {
@@ -480,9 +477,55 @@ private fun SchedulePreview() {
 		)
 	}
 	
+	val itemDateRange: (Int) -> DateRange = { item ->
+		when (item) {
+			0 -> DateRange(
+				dateFrom = dateFrom.plusHours(0),
+				dateTo = dateFrom.plusMinutes(30)
+			)
+			
+			1 -> DateRange(
+				dateFrom = dateFrom.plusHours(9),
+				dateTo = dateFrom.plusHours(18)
+			)
+			
+			2 -> DateRange(
+				dateFrom = dateFrom.plusHours(19),
+				dateTo = dateFrom.plusHours(28)
+			)
+			
+			3 -> DateRange(
+				dateFrom = dateFrom.minusHours(1),
+				dateTo = dateTo
+			)
+			
+			4 -> DateRange(
+				dateFrom = dateFrom.plusHours(12),
+				dateTo = dateFrom.plusHours(13)
+			)
+			
+			6 -> DateRange(
+				dateFrom = dateFrom.plusHours(11),
+				dateTo = dateFrom.plusHours(16)
+			)
+			
+			7 -> DateRange(
+				dateFrom = dateFrom.plusHours(18),
+				dateTo = dateFrom.plusHours(24)
+			)
+			
+			else -> DateRange(
+				dateFrom = dateFrom,
+				dateTo = dateTo
+			)
+		}
+	}
+	
 	val scheduleState = rememberScheduleState()
 	
 	var firstVisibleDateTime by remember { mutableStateOf<LocalDateTime?>(null) }
+	
+	val coroutineScope = rememberCoroutineScope()
 	
 	LaunchedEffect(scheduleState) {
 		snapshotFlow { scheduleState.firstVisibleDate }
@@ -507,6 +550,7 @@ private fun SchedulePreview() {
 				}
 			}
 		)
+		
 		Schedule(
 			itemsByRows = remember {
 				buildList {
@@ -519,49 +563,7 @@ private fun SchedulePreview() {
 			dateFrom = dateFrom,
 			dateTo = dateTo,
 			columnDuration = remember { Duration.ofHours(2) },
-			itemDateRange = { item ->
-				when (item) {
-					0 -> DateRange(
-						dateFrom = dateFrom.plusHours(0),
-						dateTo = dateFrom.plusMinutes(30)
-					)
-					
-					1 -> DateRange(
-						dateFrom = dateFrom.plusHours(9),
-						dateTo = dateFrom.plusHours(18)
-					)
-					
-					2 -> DateRange(
-						dateFrom = dateFrom.plusHours(19),
-						dateTo = dateFrom.plusHours(28)
-					)
-					
-					3 -> DateRange(
-						dateFrom = dateFrom.minusHours(1),
-						dateTo = dateTo
-					)
-					
-					4 -> DateRange(
-						dateFrom = dateFrom.plusHours(12),
-						dateTo = dateFrom.plusHours(13)
-					)
-					
-					6 -> DateRange(
-						dateFrom = dateFrom.plusHours(11),
-						dateTo = dateFrom.plusHours(16)
-					)
-					
-					7 -> DateRange(
-						dateFrom = dateFrom.plusHours(18),
-						dateTo = dateFrom.plusHours(24)
-					)
-					
-					else -> DateRange(
-						dateFrom = dateFrom,
-						dateTo = dateTo
-					)
-				}
-			},
+			itemDateRange = itemDateRange,
 			columnTitle = { columnDateFrom: LocalDateTime, columnDateTo: LocalDateTime ->
 				val formattedDateFrom = remember(columnDateFrom, dateFormatter) {
 					columnDateFrom.format(dateFormatter)
@@ -621,7 +623,12 @@ private fun SchedulePreview() {
 							strokeWidth = strokeWidthPx
 						)
 					}
-					.horizontalScroll(rememberScrollState(), false),
+					.clickable {
+						coroutineScope.launch {
+							val date = itemDateRange(item).dateFrom
+							scheduleState.animateScrollToDate(date)
+						}
+					},
 			) {
 				Text(
 					text = when (item) {
