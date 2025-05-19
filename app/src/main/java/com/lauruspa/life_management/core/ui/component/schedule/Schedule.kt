@@ -67,7 +67,6 @@ fun <T> Schedule(
 	columnTitle: @Composable (columnDateFrom: LocalDateTime, columnDateTo: LocalDateTime) -> Unit,
 	modifier: Modifier = Modifier,
 	state: ScheduleState = rememberScheduleState(),
-	backgroundColor: Color = Color.White,
 	columnTitleAlignment: Alignment.Horizontal = Alignment.CenterHorizontally,
 	columnDivider: @Composable () -> Unit = {
 		Box(
@@ -81,6 +80,8 @@ fun <T> Schedule(
 	itemsVerticalSpacing: Dp = 8.dp,
 	emptyRowHeight: Dp = 0.dp,
 	nowDate: LocalDateTime? = null,
+	nowIndicatorColor: Color = Color.Blue,
+	nowShimmerColor: Color = Color.White.copy(alpha = 0.5f),
 	itemSlot: @Composable (T) -> Unit
 ) {
 	// Валидация входных параметров
@@ -91,7 +92,6 @@ fun <T> Schedule(
 	
 	SubcomposeLayout(
 		modifier = modifier
-			.background(backgroundColor)
 			.horizontalScroll(state.horizontalScrollState)
 	) { constraints ->
 		
@@ -209,7 +209,7 @@ fun <T> Schedule(
 				Box(
 					modifier = Modifier
 						.fillMaxSize()
-						.background(backgroundColor.copy(alpha = 0.5f))
+						.background(nowShimmerColor)
 				)
 			}.map { measurable ->
 				measurable.measure(
@@ -238,15 +238,14 @@ fun <T> Schedule(
 			val gapLengthPx = 3.dp.toPx()
 			
 			val nowIndicatorPlaceable = subcompose(ScheduleSlot.NowIndicator) {
-				val indicatorColor = Color.Blue
 				Canvas(Modifier.fillMaxSize()) {
 					drawCircle(
-						color = indicatorColor,
+						color = nowIndicatorColor,
 						radius = nowIndicatorRadiusPx,
 						center = center.copy(y = nowIndicatorRadiusPx)
 					)
 					drawLine(
-						color = indicatorColor,
+						color = nowIndicatorColor,
 						start = center.copy(y = nowIndicatorRadiusPx),
 						end = center.copy(y = size.height),
 						strokeWidth = nowIndicatorLineWidth,
