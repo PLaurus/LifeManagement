@@ -17,7 +17,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -37,12 +42,15 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.map
 import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.Month
 import java.time.format.DateTimeFormatter
+import java.time.temporal.ChronoUnit
 import kotlin.math.abs
 import kotlin.math.max
 
@@ -55,6 +63,7 @@ fun <T> Schedule(
 	itemDateRange: (T) -> DateRange,
 	columnTitle: @Composable (columnDateFrom: LocalDateTime, columnDateTo: LocalDateTime) -> Unit,
 	modifier: Modifier = Modifier,
+	state: ScheduleState = rememberScheduleState(),
 	backgroundColor: Color = Color.White,
 	columnTitleAlignment: Alignment.Horizontal = Alignment.CenterHorizontally,
 	columnDivider: @Composable () -> Unit = {
@@ -76,6 +85,14 @@ fun <T> Schedule(
 	
 	val horizontalScrollState = rememberScrollState()
 	val verticalScrollState = rememberScrollState()
+	
+	LaunchedEffect(horizontalScrollState, state) {
+		snapshotFlow { horizontalScrollState.value }
+			.collect { offsetPx ->
+				state.updateHorizontalOffsetPx(offsetPx)
+			}
+	}
+	
 	SubcomposeLayout(
 		modifier = modifier
 			.background(backgroundColor)
@@ -266,6 +283,12 @@ fun <T> Schedule(
 			nowIndicatorPAP = null
 		}
 		
+		state.updateMeasuredValues(
+			dateFrom = dateFrom,
+			scheduleWidthPx = scheduleWidthPx,
+			scheduleDurationMs = scheduleDurationMs
+		)
+		
 		layout(scheduleContentSize.width, scheduleContentSize.height) {
 			// Размещение заголовков столбцов
 			columnTitlePlaceables.forEachIndexed { index, placeable ->
@@ -441,6 +464,8 @@ private enum class ScheduleSlot {
 @Preview(showBackground = true)
 @Composable
 private fun SchedulePreview() {
+	val dateFormatter = remember { DateTimeFormatter.ofPattern("HH:mm") }
+	
 	val dateFrom = remember {
 		LocalDateTime.of(
 			LocalDate.of(2025, Month.AUGUST, 19),
@@ -455,133 +480,163 @@ private fun SchedulePreview() {
 		)
 	}
 	
-	Schedule(
-		itemsByRows = buildList {
-			add(listOf(0, 1, 2))
-			for (i in 3..50) {
-				add(listOf(i))
+	val scheduleState = rememberScheduleState()
+	
+	var firstVisibleDateTime by remember { mutableStateOf<LocalDateTime?>(null) }
+	
+	LaunchedEffect(scheduleState) {
+		snapshotFlow { scheduleState.firstVisibleDate }
+			.map { date ->
+				date?.truncatedTo(ChronoUnit.HOURS)
 			}
-		},
-		dateFrom = dateFrom,
-		dateTo = dateTo,
-		columnDuration = Duration.ofHours(2),
-		itemDateRange = { item ->
-			when (item) {
-				0 -> DateRange(
-					dateFrom = dateFrom.plusHours(0),
-					dateTo = dateFrom.plusMinutes(30)
-				)
-				
-				1 -> DateRange(
-					dateFrom = dateFrom.plusHours(9),
-					dateTo = dateFrom.plusHours(18)
-				)
-				
-				2 -> DateRange(
-					dateFrom = dateFrom.plusHours(19),
-					dateTo = dateFrom.plusHours(28)
-				)
-				
-				3 -> DateRange(
-					dateFrom = dateFrom.minusHours(1),
-					dateTo = dateTo
-				)
-				
-				4 -> DateRange(
-					dateFrom = dateFrom.plusHours(12),
-					dateTo = dateFrom.plusHours(13)
-				)
-				
-				6 -> DateRange(
-					dateFrom = dateFrom.plusHours(11),
-					dateTo = dateFrom.plusHours(16)
-				)
-				
-				7 -> DateRange(
-					dateFrom = dateFrom.plusHours(18),
-					dateTo = dateFrom.plusHours(24)
-				)
-				
-				else -> DateRange(
-					dateFrom = dateFrom,
-					dateTo = dateTo
-				)
+			.filter { date -> firstVisibleDateTime?.hour != date?.hour }
+			.collect { newDate ->
+				firstVisibleDateTime = newDate
 			}
-		},
-		columnTitle = { columnDateFrom: LocalDateTime, columnDateTo: LocalDateTime ->
-			val formatter = remember { DateTimeFormatter.ofPattern("HH:mm") }
-			val formattedDateFrom = remember(columnDateFrom, formatter) {
-				columnDateFrom.format(formatter)
+	}
+	
+	Column(
+		modifier = Modifier.fillMaxSize()
+	) {
+		Text(
+			text = remember(dateFormatter, firstVisibleDateTime) {
+				if (firstVisibleDateTime != null) {
+					dateFormatter.format(firstVisibleDateTime)
+				} else {
+					"Нет данных"
+				}
 			}
-			val formattedDateTo = remember(columnDateTo, formatter) {
-				columnDateTo.format(formatter)
-			}
-			
-			Column(
-				horizontalAlignment = Alignment.CenterHorizontally,
-				modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
-			) {
-				Text(
-					text = formattedDateFrom,
-					fontWeight = FontWeight.W400,
-					fontSize = 12.sp,
-					lineHeight = 16.sp,
-					textAlign = TextAlign.Center,
-					color = Color.Gray
-				)
-				Text(
-					text = formattedDateTo,
-					fontWeight = FontWeight.W400,
-					fontSize = 12.sp,
-					lineHeight = 16.sp,
-					textAlign = TextAlign.Center,
-					color = Color.Gray
-				)
-			}
-		},
-		modifier = Modifier.fillMaxSize(),
-		nowDate = remember(dateFrom) { dateFrom.plusHours(9) }
-	) { item ->
-		val shape = RoundedCornerShape(2.dp)
-		val color = remember(item) {
-			when (item % 4) {
-				0 -> Color.Yellow
-				1 -> Color.Red
-				2 -> Color.Green
-				else -> Color.Magenta
-			}
-		}
-		
-		Row(
-			modifier = Modifier
-				.fillMaxWidth()
-				.clip(shape)
-				.background(color = color)
-				.drawWithContent {
-					val strokeWidthPx = 2.dp.toPx()
-					drawContent()
-					drawLine(
-						color = Color.Black.copy(alpha = 0.25f),
-						start = Offset(strokeWidthPx / 2, 0f),
-						end = Offset(strokeWidthPx / 2, size.height),
-						strokeWidth = strokeWidthPx
+		)
+		Schedule(
+			itemsByRows = remember {
+				buildList {
+					add(listOf(0, 1, 2))
+					for (i in 3..50) {
+						add(listOf(i))
+					}
+				}
+			},
+			dateFrom = dateFrom,
+			dateTo = dateTo,
+			columnDuration = remember { Duration.ofHours(2) },
+			itemDateRange = { item ->
+				when (item) {
+					0 -> DateRange(
+						dateFrom = dateFrom.plusHours(0),
+						dateTo = dateFrom.plusMinutes(30)
+					)
+					
+					1 -> DateRange(
+						dateFrom = dateFrom.plusHours(9),
+						dateTo = dateFrom.plusHours(18)
+					)
+					
+					2 -> DateRange(
+						dateFrom = dateFrom.plusHours(19),
+						dateTo = dateFrom.plusHours(28)
+					)
+					
+					3 -> DateRange(
+						dateFrom = dateFrom.minusHours(1),
+						dateTo = dateTo
+					)
+					
+					4 -> DateRange(
+						dateFrom = dateFrom.plusHours(12),
+						dateTo = dateFrom.plusHours(13)
+					)
+					
+					6 -> DateRange(
+						dateFrom = dateFrom.plusHours(11),
+						dateTo = dateFrom.plusHours(16)
+					)
+					
+					7 -> DateRange(
+						dateFrom = dateFrom.plusHours(18),
+						dateTo = dateFrom.plusHours(24)
+					)
+					
+					else -> DateRange(
+						dateFrom = dateFrom,
+						dateTo = dateTo
 					)
 				}
-				.horizontalScroll(rememberScrollState(), false),
-		) {
-			Text(
-				text = when (item) {
-					1 -> "Item 0\n".repeat(2)
-					else -> "Item $item"
-				},
+			},
+			columnTitle = { columnDateFrom: LocalDateTime, columnDateTo: LocalDateTime ->
+				val formattedDateFrom = remember(columnDateFrom, dateFormatter) {
+					columnDateFrom.format(dateFormatter)
+				}
+				val formattedDateTo = remember(columnDateTo, dateFormatter) {
+					columnDateTo.format(dateFormatter)
+				}
+				
+				Column(
+					horizontalAlignment = Alignment.CenterHorizontally,
+					modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+				) {
+					Text(
+						text = formattedDateFrom,
+						fontWeight = FontWeight.W400,
+						fontSize = 12.sp,
+						lineHeight = 16.sp,
+						textAlign = TextAlign.Center,
+						color = Color.Gray
+					)
+					Text(
+						text = formattedDateTo,
+						fontWeight = FontWeight.W400,
+						fontSize = 12.sp,
+						lineHeight = 16.sp,
+						textAlign = TextAlign.Center,
+						color = Color.Gray
+					)
+				}
+			},
+			modifier = Modifier.weight(1f),
+			state = scheduleState,
+			nowDate = remember(dateFrom) { dateFrom.plusHours(9) }
+		) { item ->
+			val shape = RoundedCornerShape(2.dp)
+			val color = remember(item) {
+				when (item % 4) {
+					0 -> Color.Yellow
+					1 -> Color.Red
+					2 -> Color.Green
+					else -> Color.Magenta
+				}
+			}
+			
+			Row(
 				modifier = Modifier
-					.padding(start = 10.dp, top = 6.dp, bottom = 6.dp)
-					.requiredWidthIn(max = Dp.Infinity),
-				fontWeight = FontWeight.W500,
-				fontSize = 14.sp,
-				lineHeight = 20.sp,
-				color = Color.Black,
-			)
+					.fillMaxWidth()
+					.clip(shape)
+					.background(color = color)
+					.drawWithContent {
+						val strokeWidthPx = 2.dp.toPx()
+						drawContent()
+						drawLine(
+							color = Color.Black.copy(alpha = 0.25f),
+							start = Offset(strokeWidthPx / 2, 0f),
+							end = Offset(strokeWidthPx / 2, size.height),
+							strokeWidth = strokeWidthPx
+						)
+					}
+					.horizontalScroll(rememberScrollState(), false),
+			) {
+				Text(
+					text = when (item) {
+						1 -> "Item 0\n".repeat(2)
+						else -> "Item $item"
+					},
+					modifier = Modifier
+						.padding(start = 10.dp, top = 6.dp, bottom = 6.dp)
+						.requiredWidthIn(max = Dp.Infinity),
+					fontWeight = FontWeight.W500,
+					fontSize = 14.sp,
+					lineHeight = 20.sp,
+					color = Color.Black,
+				)
+			}
 		}
 	}
 }
