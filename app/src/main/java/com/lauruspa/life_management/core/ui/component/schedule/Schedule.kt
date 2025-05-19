@@ -2,11 +2,6 @@ package com.lauruspa.life_management.core.ui.component.schedule
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.Orientation
-import androidx.compose.foundation.gestures.ScrollableState
-import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.gestures.rememberScrollableState
-import androidx.compose.foundation.gestures.scrollable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -31,7 +26,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.Placeable
 import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.text.font.FontWeight
@@ -82,18 +76,10 @@ fun <T> Schedule(
 	
 	val horizontalScrollState = rememberScrollState()
 	val verticalScrollState = rememberScrollState()
-	
 	SubcomposeLayout(
 		modifier = modifier
 			.background(backgroundColor)
-			.pointerInput(Unit) {
-				detectDragGestures { change, dragAmount ->
-					change.consume()
-					val (dx, _) = dragAmount
-					horizontalScrollState.dispatchRawDelta(-dx)
-				}
-			}
-			.horizontalScroll(horizontalScrollState, enabled = false)
+			.horizontalScroll(horizontalScrollState)
 	) { constraints ->
 		
 		// Расчет общей длительности расписания
@@ -150,15 +136,7 @@ fun <T> Schedule(
 				itemsVerticalSpacing = itemsVerticalSpacing,
 				modifier = Modifier
 					.fillMaxSize()
-					.pointerInput(Unit) {
-						detectDragGestures { change, dragAmount ->
-							change.consume()
-							val (dx, dy) = dragAmount
-							horizontalScrollState.dispatchRawDelta(-dx)
-							verticalScrollState.dispatchRawDelta(-dy)
-						}
-					}
-					.verticalScroll(verticalScrollState, enabled = false),
+					.verticalScroll(verticalScrollState),
 				itemSlot = itemSlot
 			)
 		}.map { measurable ->
