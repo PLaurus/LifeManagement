@@ -46,12 +46,22 @@ class ScheduleState(
 	suspend fun animateScrollToDate(
 		date: LocalDateTime
 	) {
-		val layoutInfo = this.layoutInfo ?: return
-		val scheduleDurationMs = layoutInfo.scheduleDurationMs.takeIf { it > 0 } ?: return
+		val dateX = calcDatePosX(date) ?: return
+		horizontalScrollState.animateScrollTo(dateX)
+	}
+	
+	@Suppress("unused")
+	suspend fun scrollToDate(date: LocalDateTime) {
+		val dateX = calcDatePosX(date) ?: return
+		horizontalScrollState.scrollTo(dateX)
+	}
+	
+	private fun calcDatePosX(date: LocalDateTime): Int? {
+		val layoutInfo = this.layoutInfo ?: return null
+		val scheduleDurationMs = layoutInfo.scheduleDurationMs.takeIf { it > 0 } ?: return null
 		val relDateMs = Duration.between(layoutInfo.dateFrom, date)
 			.toMillis()
-		val dateX = (relDateMs * layoutInfo.scheduleWidthPx) / scheduleDurationMs
-		horizontalScrollState.animateScrollTo(dateX.toInt())
+		return ((relDateMs * layoutInfo.scheduleWidthPx) / scheduleDurationMs).toInt()
 	}
 	
 	internal data class LayoutInfo(
