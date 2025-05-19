@@ -79,6 +79,7 @@ fun <T> Schedule(
 	},
 	itemsPaddingVerticalDp: Dp = 25.dp,
 	itemsVerticalSpacing: Dp = 8.dp,
+	emptyRowHeight: Dp = 0.dp,
 	nowDate: LocalDateTime? = null,
 	itemSlot: @Composable (T) -> Unit
 ) {
@@ -146,6 +147,7 @@ fun <T> Schedule(
 				scheduleDurationMs = scheduleDurationMs,
 				itemsPaddingVerticalDp = itemsPaddingVerticalDp,
 				itemsVerticalSpacing = itemsVerticalSpacing,
+				emptyRowHeight = emptyRowHeight,
 				modifier = Modifier
 					.fillMaxSize()
 					.verticalScroll(verticalScrollState),
@@ -330,6 +332,7 @@ private fun <T> ScheduleItems(
 	scheduleDurationMs: Long,
 	itemsPaddingVerticalDp: Dp,
 	itemsVerticalSpacing: Dp,
+	emptyRowHeight: Dp,
 	modifier: Modifier = Modifier,
 	itemSlot: @Composable (T) -> Unit
 ) {
@@ -340,6 +343,7 @@ private fun <T> ScheduleItems(
 		// Преобразование единиц измерения из dp в пиксели
 		val itemsPaddingVerticalPx = itemsPaddingVerticalDp.roundToPx()
 		val itemsVerticalSpacingPx = itemsVerticalSpacing.roundToPx()
+		val emptyRowHeightPx = emptyRowHeight.roundToPx()
 		
 		// Получение всех элементов из itemsByRows
 		val allItems = itemsByRows.flatten()
@@ -382,7 +386,7 @@ private fun <T> ScheduleItems(
 		
 		// Расчет высоты каждого ряда (максимальная высота элементов в ряду)
 		val rowHeights = placeablesByRows.map { rowPlaceables ->
-			rowPlaceables.maxOfOrNull { it.height } ?: 0
+			rowPlaceables.maxOfOrNull { it.height } ?: emptyRowHeightPx
 		}
 		
 		// Расчет y-позиций для каждого ряда
@@ -555,6 +559,7 @@ private fun SchedulePreview() {
 			itemsByRows = remember {
 				buildList {
 					add(listOf(0, 1, 2))
+					add(emptyList())
 					for (i in 3..50) {
 						add(listOf(i))
 					}
@@ -596,6 +601,7 @@ private fun SchedulePreview() {
 			},
 			modifier = Modifier.weight(1f),
 			state = scheduleState,
+			emptyRowHeight = 48.dp,
 			nowDate = remember(dateFrom) { dateFrom.plusHours(9) }
 		) { item ->
 			val shape = RoundedCornerShape(2.dp)
