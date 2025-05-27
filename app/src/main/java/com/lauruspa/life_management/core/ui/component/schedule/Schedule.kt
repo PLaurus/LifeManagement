@@ -16,12 +16,17 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -41,6 +46,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
 import java.time.Duration
 import java.time.LocalDate
@@ -48,7 +54,6 @@ import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.Month
 import java.time.format.DateTimeFormatter
-import java.time.temporal.ChronoUnit
 import kotlin.math.abs
 import kotlin.math.max
 
@@ -66,9 +71,9 @@ fun <T> Schedule(
 	columnDivider: @Composable () -> Unit = {
 		Box(
 			modifier = Modifier
-                .fillMaxHeight()
-                .width(1.dp)
-                .background(Color.Gray)
+				.fillMaxHeight()
+				.width(1.dp)
+				.background(Color.Gray)
 		)
 	},
 	itemsPaddingVerticalDp: Dp = 25.dp,
@@ -144,8 +149,8 @@ fun <T> Schedule(
 				itemsVerticalSpacing = itemsVerticalSpacing,
 				emptyRowHeight = emptyRowHeight,
 				modifier = Modifier
-                    .fillMaxSize()
-                    .verticalScroll(verticalScrollState),
+					.fillMaxSize()
+					.verticalScroll(verticalScrollState),
 				itemSlot = itemSlot
 			)
 		}.map { measurable ->
@@ -204,8 +209,8 @@ fun <T> Schedule(
 			val timeBeforeNowShimmerPlaceable = subcompose(ScheduleSlot.TimeBeforeNowShimmer) {
 				Box(
 					modifier = Modifier
-                        .fillMaxSize()
-                        .background(nowShimmerColor)
+						.fillMaxSize()
+						.background(nowShimmerColor)
 				)
 			}.map { measurable ->
 				measurable.measure(
@@ -461,18 +466,19 @@ private enum class ScheduleSlot {
 @Preview(showBackground = true)
 @Composable
 private fun SchedulePreview() {
-	val dateFormatter = remember { DateTimeFormatter.ofPattern("HH:mm") }
+	val timeDateFormatter = remember { DateTimeFormatter.ofPattern("HH:mm") }
+	val dayDateFormatter = remember { DateTimeFormatter.ofPattern("dd.MM.yyyy") }
 	
 	val dateFrom = remember {
 		LocalDateTime.of(
-			LocalDate.of(2025, Month.AUGUST, 19),
+			LocalDate.of(2025, Month.AUGUST, 1),
 			LocalTime.of(0, 0, 0)
 		)
 	}
 	
 	val dateTo = remember {
 		LocalDateTime.of(
-			LocalDate.of(2025, Month.AUGUST, 20),
+			LocalDate.of(2025, Month.AUGUST, 27),
 			LocalTime.of(0, 0, 0)
 		)
 	}
@@ -496,7 +502,7 @@ private fun SchedulePreview() {
 			
 			3 -> DateRange(
 				dateFrom = dateFrom.minusHours(1),
-				dateTo = dateTo
+				dateTo = dateFrom.plusDays(1)
 			)
 			
 			4 -> DateRange(
@@ -516,19 +522,36 @@ private fun SchedulePreview() {
 			
 			else -> DateRange(
 				dateFrom = dateFrom,
-				dateTo = dateTo
+				dateTo = dateFrom.plusMinutes(30)
 			)
 		}
 	}
 	
 	val scheduleState = rememberScheduleState(
-		initialFirstVisibleDate = remember(dateFrom) { dateFrom.plusHours(3) }
+		initialFirstVisibleDate = remember { dateTo.minusDays(1) }
 	)
 	
-	val chosenDate by remember {
-		derivedStateOf {
-			scheduleState.targetDate
-				?.truncatedTo(ChronoUnit.HOURS)
+	var schedulePreviewState by remember {
+		mutableStateOf(
+			SchedulePreviewState(
+				scheduleDateRange = dateFrom..dateTo,
+				chosenDate = dateTo.minusDays(1),
+				zoom = 0
+			)
+		)
+	}
+	
+	LaunchedEffect(scheduleState) {
+		snapshotFlow { scheduleState.targetDate }
+			.filterNotNull()
+			.collect { targetDate ->
+				schedulePreviewState = schedulePreviewState.updateChosenDate(targetDate)
+			}
+	}
+	
+	LaunchedEffect(scheduleState, schedulePreviewState.chosenDate) {
+		if (scheduleState.targetDate != schedulePreviewState.chosenDate) {
+			scheduleState.animateScrollToDate(schedulePreviewState.chosenDate)
 		}
 	}
 	
@@ -537,15 +560,33 @@ private fun SchedulePreview() {
 	Column(
 		modifier = Modifier.fillMaxSize()
 	) {
+		val scheduleTargetDate = scheduleState.currentDate
 		Text(
-			text = remember(dateFormatter, chosenDate) {
-				if (chosenDate != null) {
-					dateFormatter.format(chosenDate)
+			text = remember(dayDateFormatter, scheduleTargetDate) {
+				if (scheduleTargetDate != null) {
+					dayDateFormatter.format(scheduleTargetDate)
 				} else {
 					"Нет данных"
 				}
 			}
 		)
+		
+		Row {
+			Button(
+				onClick = {
+					schedulePreviewState = schedulePreviewState.zoomOut()
+				}
+			) {
+				Text(text = "-")
+			}
+			Button(
+				onClick = {
+					schedulePreviewState = schedulePreviewState.zoomIn()
+				}
+			) {
+				Text(text = "+")
+			}
+		}
 		
 		Schedule(
 			itemsByRows = remember {
@@ -559,14 +600,26 @@ private fun SchedulePreview() {
 			},
 			dateFrom = dateFrom,
 			dateTo = dateTo,
-			columnDuration = remember { Duration.ofHours(2) },
+			columnDuration = remember(schedulePreviewState.zoom) {
+				when (schedulePreviewState.zoom) {
+					1 -> Duration.ofHours(2)
+					else -> Duration.ofDays(1)
+				}
+			},
 			itemDateRange = itemDateRange,
 			columnTitle = { columnDateFrom: LocalDateTime, columnDateTo: LocalDateTime ->
-				val formattedDateFrom = remember(columnDateFrom, dateFormatter) {
-					columnDateFrom.format(dateFormatter)
+				val formattedDateFrom = remember(schedulePreviewState.zoom, columnDateFrom, timeDateFormatter) {
+					when (schedulePreviewState.zoom) {
+						1 -> columnDateFrom.format(timeDateFormatter)
+						else -> columnDateFrom.format(dayDateFormatter)
+					}
+					
 				}
-				val formattedDateTo = remember(columnDateTo, dateFormatter) {
-					columnDateTo.format(dateFormatter)
+				val formattedDateTo = remember(columnDateTo, timeDateFormatter) {
+					when (schedulePreviewState.zoom) {
+						1 -> columnDateTo.format(timeDateFormatter)
+						else -> ""
+					}
 				}
 				
 				Column(
@@ -608,25 +661,25 @@ private fun SchedulePreview() {
 			
 			Row(
 				modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(shape)
-                    .background(color = color)
-                    .drawWithContent {
-                        val strokeWidthPx = 2.dp.toPx()
-                        drawContent()
-                        drawLine(
-                            color = Color.Black.copy(alpha = 0.25f),
-                            start = Offset(strokeWidthPx / 2, 0f),
-                            end = Offset(strokeWidthPx / 2, size.height),
-                            strokeWidth = strokeWidthPx
-                        )
-                    }
-                    .clickable {
-                        coroutineScope.launch {
-                            val date = itemDateRange(item).dateFrom
-                            scheduleState.animateScrollToDate(date)
-                        }
-                    },
+					.fillMaxWidth()
+					.clip(shape)
+					.background(color = color)
+					.drawWithContent {
+						val strokeWidthPx = 2.dp.toPx()
+						drawContent()
+						drawLine(
+							color = Color.Black.copy(alpha = 0.25f),
+							start = Offset(strokeWidthPx / 2, 0f),
+							end = Offset(strokeWidthPx / 2, size.height),
+							strokeWidth = strokeWidthPx
+						)
+					}
+					.clickable {
+						coroutineScope.launch {
+							val date = itemDateRange(item).dateFrom
+							scheduleState.animateScrollToDate(date)
+						}
+					},
 			) {
 				Text(
 					text = when (item) {
@@ -634,8 +687,8 @@ private fun SchedulePreview() {
 						else -> "Item $item"
 					},
 					modifier = Modifier
-                        .padding(start = 10.dp, top = 6.dp, bottom = 6.dp)
-                        .requiredWidthIn(max = Dp.Infinity),
+						.padding(start = 10.dp, top = 6.dp, bottom = 6.dp)
+						.requiredWidthIn(max = Dp.Infinity),
 					fontWeight = FontWeight.W500,
 					fontSize = 14.sp,
 					lineHeight = 20.sp,
@@ -643,5 +696,37 @@ private fun SchedulePreview() {
 				)
 			}
 		}
+	}
+}
+
+@Immutable
+private data class SchedulePreviewState(
+	val scheduleDateRange: ClosedRange<LocalDateTime>,
+	val chosenDate: LocalDateTime,
+	val zoom: Int
+) {
+	private val minZoom = 0
+	private val maxZoom = 1
+	
+	fun updateChosenDate(newDate: LocalDateTime): SchedulePreviewState {
+		return copy(
+			chosenDate = newDate
+		)
+	}
+	
+	fun zoomIn(): SchedulePreviewState {
+		val newZoom = (zoom + 1).coerceAtMost(maxZoom)
+		return copy(
+			chosenDate = scheduleDateRange.endInclusive.minusDays(1),
+			zoom = newZoom,
+		)
+	}
+	
+	fun zoomOut(): SchedulePreviewState {
+		val newZoom = (zoom - 1).coerceAtLeast(minZoom)
+		return copy(
+			chosenDate = scheduleDateRange.endInclusive.minusDays(1),
+			zoom = newZoom,
+		)
 	}
 }
