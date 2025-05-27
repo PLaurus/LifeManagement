@@ -18,13 +18,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -44,8 +41,6 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlinx.coroutines.flow.filter
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import java.time.Duration
 import java.time.LocalDate
@@ -71,9 +66,9 @@ fun <T> Schedule(
 	columnDivider: @Composable () -> Unit = {
 		Box(
 			modifier = Modifier
-				.fillMaxHeight()
-				.width(1.dp)
-				.background(Color.Gray)
+                .fillMaxHeight()
+                .width(1.dp)
+                .background(Color.Gray)
 		)
 	},
 	itemsPaddingVerticalDp: Dp = 25.dp,
@@ -149,8 +144,8 @@ fun <T> Schedule(
 				itemsVerticalSpacing = itemsVerticalSpacing,
 				emptyRowHeight = emptyRowHeight,
 				modifier = Modifier
-					.fillMaxSize()
-					.verticalScroll(verticalScrollState),
+                    .fillMaxSize()
+                    .verticalScroll(verticalScrollState),
 				itemSlot = itemSlot
 			)
 		}.map { measurable ->
@@ -166,7 +161,8 @@ fun <T> Schedule(
 			.first()
 		
 		// Вычисление позиций x для столбцов
-		val columnXPositions = (0 until columnsCount).map { columnIndex -> columnIndex * columnWidthPx }
+		val columnXPositions =
+			(0 until columnsCount).map { columnIndex -> columnIndex * columnWidthPx }
 		
 		// Определение общего размера содержимого расписания
 		val scheduleContentSize = IntSize(
@@ -208,8 +204,8 @@ fun <T> Schedule(
 			val timeBeforeNowShimmerPlaceable = subcompose(ScheduleSlot.TimeBeforeNowShimmer) {
 				Box(
 					modifier = Modifier
-						.fillMaxSize()
-						.background(nowShimmerColor)
+                        .fillMaxSize()
+                        .background(nowShimmerColor)
 				)
 			}.map { measurable ->
 				measurable.measure(
@@ -406,7 +402,8 @@ private fun <T> ScheduleItems(
 				val itemDateRangeValue = itemToDateRange[item]!!
 				val itemRelativeDateFromMs = Duration.between(dateFrom, itemDateRangeValue.dateFrom)
 					.toMillis()
-				val itemPosX = (itemRelativeDateFromMs * scheduleWidthPx / scheduleDurationMs).toInt()
+				val itemPosX =
+					(itemRelativeDateFromMs * scheduleWidthPx / scheduleDurationMs).toInt()
 				PlaceableAndPosition(
 					placeable = placeable,
 					position = IntOffset(itemPosX, y)
@@ -524,30 +521,26 @@ private fun SchedulePreview() {
 		}
 	}
 	
-	val scheduleState = rememberScheduleState()
+	val scheduleState = rememberScheduleState(
+		initialFirstVisibleDate = remember(dateFrom) { dateFrom.plusHours(3) }
+	)
 	
-	var firstVisibleDateTime by remember { mutableStateOf<LocalDateTime?>(null) }
+	val chosenDate by remember {
+		derivedStateOf {
+			scheduleState.targetDate
+				?.truncatedTo(ChronoUnit.HOURS)
+		}
+	}
 	
 	val coroutineScope = rememberCoroutineScope()
-	
-	LaunchedEffect(scheduleState) {
-		snapshotFlow { scheduleState.firstVisibleDate }
-			.map { date ->
-				date?.truncatedTo(ChronoUnit.HOURS)
-			}
-			.filter { date -> firstVisibleDateTime?.hour != date?.hour }
-			.collect { newDate ->
-				firstVisibleDateTime = newDate
-			}
-	}
 	
 	Column(
 		modifier = Modifier.fillMaxSize()
 	) {
 		Text(
-			text = remember(dateFormatter, firstVisibleDateTime) {
-				if (firstVisibleDateTime != null) {
-					dateFormatter.format(firstVisibleDateTime)
+			text = remember(dateFormatter, chosenDate) {
+				if (chosenDate != null) {
+					dateFormatter.format(chosenDate)
 				} else {
 					"Нет данных"
 				}
@@ -615,25 +608,25 @@ private fun SchedulePreview() {
 			
 			Row(
 				modifier = Modifier
-					.fillMaxWidth()
-					.clip(shape)
-					.background(color = color)
-					.drawWithContent {
-						val strokeWidthPx = 2.dp.toPx()
-						drawContent()
-						drawLine(
-							color = Color.Black.copy(alpha = 0.25f),
-							start = Offset(strokeWidthPx / 2, 0f),
-							end = Offset(strokeWidthPx / 2, size.height),
-							strokeWidth = strokeWidthPx
-						)
-					}
-					.clickable {
-						coroutineScope.launch {
-							val date = itemDateRange(item).dateFrom
-							scheduleState.animateScrollToDate(date)
-						}
-					},
+                    .fillMaxWidth()
+                    .clip(shape)
+                    .background(color = color)
+                    .drawWithContent {
+                        val strokeWidthPx = 2.dp.toPx()
+                        drawContent()
+                        drawLine(
+                            color = Color.Black.copy(alpha = 0.25f),
+                            start = Offset(strokeWidthPx / 2, 0f),
+                            end = Offset(strokeWidthPx / 2, size.height),
+                            strokeWidth = strokeWidthPx
+                        )
+                    }
+                    .clickable {
+                        coroutineScope.launch {
+                            val date = itemDateRange(item).dateFrom
+                            scheduleState.animateScrollToDate(date)
+                        }
+                    },
 			) {
 				Text(
 					text = when (item) {
@@ -641,8 +634,8 @@ private fun SchedulePreview() {
 						else -> "Item $item"
 					},
 					modifier = Modifier
-						.padding(start = 10.dp, top = 6.dp, bottom = 6.dp)
-						.requiredWidthIn(max = Dp.Infinity),
+                        .padding(start = 10.dp, top = 6.dp, bottom = 6.dp)
+                        .requiredWidthIn(max = Dp.Infinity),
 					fontWeight = FontWeight.W500,
 					fontSize = 14.sp,
 					lineHeight = 20.sp,
