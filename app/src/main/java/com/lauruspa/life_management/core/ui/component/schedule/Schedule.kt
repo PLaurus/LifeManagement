@@ -527,19 +527,19 @@ private fun SchedulePreview() {
 		}
 	}
 	
-	val scheduleState = rememberScheduleState(
-		initialFirstVisibleDate = remember { dateTo.minusDays(1) }
-	)
-	
 	var schedulePreviewState by remember {
 		mutableStateOf(
 			SchedulePreviewState(
 				scheduleDateRange = dateFrom..dateTo,
-				chosenDate = dateTo.minusDays(1),
+				chosenDate = dateTo.minusDays(5),
 				zoom = 0
 			)
 		)
 	}
+	
+	val scheduleState = rememberScheduleState(
+		initialFirstVisibleDate = remember { schedulePreviewState.chosenDate }
+	)
 	
 	LaunchedEffect(scheduleState) {
 		snapshotFlow { scheduleState.targetDate }
@@ -717,7 +717,7 @@ private data class SchedulePreviewState(
 	fun zoomIn(): SchedulePreviewState {
 		val newZoom = (zoom + 1).coerceAtMost(maxZoom)
 		return copy(
-			chosenDate = scheduleDateRange.endInclusive.minusDays(1),
+			chosenDate = scheduleDateRange.endInclusive.minusDays(5),
 			zoom = newZoom,
 		)
 	}
@@ -725,7 +725,7 @@ private data class SchedulePreviewState(
 	fun zoomOut(): SchedulePreviewState {
 		val newZoom = (zoom - 1).coerceAtLeast(minZoom)
 		return copy(
-			chosenDate = scheduleDateRange.endInclusive.minusDays(1),
+			chosenDate = scheduleDateRange.endInclusive.minusDays(5),
 			zoom = newZoom,
 		)
 	}
