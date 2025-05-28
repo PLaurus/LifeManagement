@@ -46,25 +46,38 @@ class ScheduleState(
 	val targetDate: LocalDateTime? by derivedStateOf(structuralEqualityPolicy()) {
 		if (!isScrollInProgress) {
 			currentDate
-		} else {
+		} else if (programmaticScrollTargetDate != null) {
 			programmaticScrollTargetDate
+		} else {
+			currentDate
 		}
 	}
 	
 	internal fun updateLayoutInfo(
 		layoutInfo: LayoutInfo
 	) {
-		if (!isHorizontalScrollStateInitialized) {
-			initializeHorizontalScrollState(layoutInfo)
+		if (layoutInfo == this.layoutInfo) return
+		val date = if (isHorizontalScrollStateInitialized) {
+			currentDate
+		} else {
+			initialFirstVisibleDate
 		}
 		
 		this.layoutInfo = layoutInfo
+		
+		initializeHorizontalScrollState(
+			layoutInfo = layoutInfo,
+			date = date
+		)
 	}
 	
-	private fun initializeHorizontalScrollState(layoutInfo: LayoutInfo) {
-		val initialScrollX = if (initialFirstVisibleDate != null) {
+	private fun initializeHorizontalScrollState(
+		layoutInfo: LayoutInfo,
+		date: LocalDateTime?
+	) {
+		val initialScrollX = if (date != null) {
 			calcDatePosX(
-				date = initialFirstVisibleDate,
+				date = date,
 				layoutInfo = layoutInfo
 			) ?: 0
 		} else {
@@ -98,6 +111,32 @@ class ScheduleState(
 			layoutInfo = layoutInfo ?: return
 		) ?: return
 		horizontalScrollState.animateScrollTo(dateX)
+
+//		horizontalScrollState.scroll {
+//			snapshotFlow { layoutInfo }
+//				.mapLatest { layoutInfo ->
+//					calcDatePosX(
+//						date = date,
+//						layoutInfo = layoutInfo ?: return@mapLatest null
+//					) ?: return@mapLatest null
+//				}
+//				.mapLatest { posX ->
+//					var previousValue = 0f
+//					if (posX != null) {
+//						animate(
+//							0f,
+//							(posX - horizontalScrollState.value).toFloat(),
+//							animationSpec = SpringSpec()
+//						) { currentValue, _ ->
+//							previousValue += scrollBy(currentValue - previousValue)
+//						}
+//					}
+//
+//					previousValue
+//				}
+//				.first()
+//		}
+		programmaticScrollTargetDate = null
 	}
 	
 	@Suppress("unused")

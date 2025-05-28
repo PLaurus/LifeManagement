@@ -25,6 +25,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -46,7 +47,13 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import java.time.Duration
 import java.time.LocalDate
@@ -467,7 +474,7 @@ private enum class ScheduleSlot {
 @Composable
 private fun SchedulePreview() {
 	val timeDateFormatter = remember { DateTimeFormatter.ofPattern("HH:mm") }
-	val dayDateFormatter = remember { DateTimeFormatter.ofPattern("dd.MM.yyyy") }
+	val dayDateFormatter = remember { DateTimeFormatter.ofPattern("dd.MM.yyyy \nHH:mm") }
 	
 	val dateFrom = remember {
 		LocalDateTime.of(
@@ -541,33 +548,54 @@ private fun SchedulePreview() {
 		initialFirstVisibleDate = remember { schedulePreviewState.chosenDate }
 	)
 	
+	val chosenDateState by rememberUpdatedState(schedulePreviewState.chosenDate)
 	LaunchedEffect(scheduleState) {
 		snapshotFlow { scheduleState.targetDate }
 			.filterNotNull()
-			.collect { targetDate ->
-				schedulePreviewState = schedulePreviewState.updateChosenDate(targetDate)
+			.filter { targetDate -> targetDate != chosenDateState }
+			.collectLatest { targetDate ->
+				coroutineScope {
+					snapshotFlow { chosenDateState }
+						.drop(1)
+						.filter { chosenDate -> chosenDate != targetDate }
+						.onEach {
+							scheduleState.animateScrollToDate(schedulePreviewState.chosenDate)
+						}
+						.launchIn(this)
+					
+					schedulePreviewState = schedulePreviewState.updateChosenDate(targetDate)
+				}
 			}
 	}
-	
-	LaunchedEffect(scheduleState, schedulePreviewState.chosenDate) {
-		if (scheduleState.targetDate != schedulePreviewState.chosenDate) {
-			scheduleState.animateScrollToDate(schedulePreviewState.chosenDate)
-		}
-	}
+
+//	LaunchedEffect(scheduleState, schedulePreviewState.chosenDate) {
+//		if (scheduleState.targetDate != schedulePreviewState.chosenDate) {
+//			scheduleState.animateScrollToDate(schedulePreviewState.chosenDate)
+//		}
+//	}
 	
 	val coroutineScope = rememberCoroutineScope()
 	
 	Column(
 		modifier = Modifier.fillMaxSize()
 	) {
-		val scheduleTargetDate = scheduleState.currentDate
+		val scheduleChosenDate = schedulePreviewState.chosenDate
+		Text(
+			text = remember(dayDateFormatter, scheduleChosenDate) {
+				val value = dayDateFormatter.format(scheduleChosenDate)
+				"Chosen: $value"
+			}
+		)
+		
+		val scheduleTargetDate = scheduleState.targetDate
 		Text(
 			text = remember(dayDateFormatter, scheduleTargetDate) {
-				if (scheduleTargetDate != null) {
+				val value = if (scheduleTargetDate != null) {
 					dayDateFormatter.format(scheduleTargetDate)
 				} else {
 					"Нет данных"
 				}
+				"Target: $value"
 			}
 		)
 		
