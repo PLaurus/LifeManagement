@@ -47,13 +47,8 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.drop
-import kotlinx.coroutines.flow.filter
-import kotlinx.coroutines.flow.filterNotNull
-import kotlinx.coroutines.flow.launchIn
-import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import java.time.Duration
 import java.time.LocalDate
@@ -99,6 +94,7 @@ fun <T> Schedule(
 	
 	SubcomposeLayout(
 		modifier = modifier
+			.then(state.onRemeasuredModifier)
 			.horizontalScroll(state.horizontalScrollState)
 	) { constraints ->
 		
@@ -544,45 +540,55 @@ private fun SchedulePreview() {
 		)
 	}
 	
+	val chosenDateState by rememberUpdatedState(schedulePreviewState.chosenDate)
 	val scheduleState = rememberScheduleState(
-		initialFirstVisibleDate = remember { schedulePreviewState.chosenDate }
+		initialFirstVisibleDate = remember { chosenDateState }
 	)
 	
-	val chosenDateState by rememberUpdatedState(schedulePreviewState.chosenDate)
 	LaunchedEffect(scheduleState) {
-		snapshotFlow { scheduleState.targetDate }
-			.filterNotNull()
-			.filter { targetDate -> targetDate != chosenDateState }
-			.collectLatest { targetDate ->
-				coroutineScope {
-					snapshotFlow { chosenDateState }
-						.drop(1)
-						.filter { chosenDate -> chosenDate != targetDate }
-						.onEach {
-							scheduleState.animateScrollToDate(schedulePreviewState.chosenDate)
-						}
-						.launchIn(this)
-					
-					schedulePreviewState = schedulePreviewState.updateChosenDate(targetDate)
-				}
+		val targetDateFlow = snapshotFlow { scheduleState.targetDate }
+		val chosenDateFlow = snapshotFlow { chosenDateState }
+		
+		targetDateFlow
+			.combine(chosenDateFlow) { targetDate, chosenDate ->
+				targetDate to chosenDate
 			}
+			.collectLatest(
+				object : suspend (Pair<LocalDateTime?, LocalDateTime>) -> Unit {
+					var prevTargetDate: LocalDateTime? = null
+					var prevChosenDate: LocalDateTime? = null
+					override suspend fun invoke(value: Pair<LocalDateTime?, LocalDateTime>) {
+						val (targetDate, chosenDate) = value
+						
+						if (chosenDate != targetDate && chosenDate != prevChosenDate) {
+							launch {
+								scheduleState.animateScrollToDate(chosenDate)
+							}
+							
+							prevChosenDate = targetDate
+						} else {
+							if (targetDate != null) {
+								schedulePreviewState = schedulePreviewState.updateChosenDate(targetDate)
+								prevChosenDate = targetDate
+							} else {
+								prevChosenDate = chosenDate
+							}
+						}
+						
+						prevTargetDate = targetDate
+					}
+				}
+			)
 	}
-
-//	LaunchedEffect(scheduleState, schedulePreviewState.chosenDate) {
-//		if (scheduleState.targetDate != schedulePreviewState.chosenDate) {
-//			scheduleState.animateScrollToDate(schedulePreviewState.chosenDate)
-//		}
-//	}
 	
 	val coroutineScope = rememberCoroutineScope()
 	
 	Column(
 		modifier = Modifier.fillMaxSize()
 	) {
-		val scheduleChosenDate = schedulePreviewState.chosenDate
 		Text(
-			text = remember(dayDateFormatter, scheduleChosenDate) {
-				val value = dayDateFormatter.format(scheduleChosenDate)
+			text = remember(dayDateFormatter, chosenDateState) {
+				val value = dayDateFormatter.format(chosenDateState)
 				"Chosen: $value"
 			}
 		)
